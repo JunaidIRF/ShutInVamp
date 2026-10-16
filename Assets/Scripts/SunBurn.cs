@@ -14,7 +14,7 @@ public class SunBurn : MonoBehaviour
     public Player player;
     public Light sun;                       // falls back to RenderSettings.sun / the first directional light
     public Volume volume;                   // BurnVolume: warm grade + orange vignette
-    public Image overlay;                   // HUD3D/BurnOverlay: orange screen-edge glow
+    public Image overlay;                   // ScreenFX/BurnOverlay: ScreenFire flames, alpha = strength
     public ParticleSystem[] handFires;      // flames parented to the hands
     public Image sunIcon;                   // HUD3D/SunIcon by the health bar: the "you're in sunlight" cue
 
