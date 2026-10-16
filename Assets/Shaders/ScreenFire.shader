@@ -57,10 +57,10 @@ Shader "ShutInVamp/UI/ScreenFire"
                 float2 p = float2(i.uv.x * aspect * 6, i.uv.y * 4 - _Time.y * _Speed * 4);
                 float n = noise(p) * 0.65 + noise(p * 2.1) * 0.35;
 
-                float heat = 1 - i.uv.y / _Height;              // 1 at the bottom edge, 0 at the flame top
-                float h = heat + (n - 0.5) * 0.8;
-                float a = smoothstep(0.1, 0.6, h);
-                fixed3 col = lerp(_Cool.rgb, _Hot.rgb, smoothstep(0.5, 1, h));
+                float heat = saturate(1 - i.uv.y / _Height);    // 1 at the bottom edge, 0 at the top of the glow
+                float h = saturate(heat + (n - 0.5) * 0.35 * heat);  // gentle waver, no hard edge
+                float a = h * h;                                // soft falloff that fades into the scene
+                fixed3 col = lerp(_Cool.rgb, _Hot.rgb, h * h);
                 return fixed4(col, a * _Opacity * i.color.a);
             }
             ENDCG

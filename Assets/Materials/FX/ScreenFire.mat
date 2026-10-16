@@ -31,8 +31,8 @@ Material:
     m_Floats:
     - _ColorMask: 15
     - _Glow: 0.25
-    - _Height: 0.3
-    - _Opacity: 0.6
+    - _Height: 0.25
+    - _Opacity: 0.35
     - _SideWidth: 0.07
     - _Speed: 1.1
     - _Stencil: 0
@@ -41,8 +41,8 @@ Material:
     - _StencilReadMask: 255
     - _StencilWriteMask: 255
     m_Colors:
-    - _Cool: {r: 0.54999995, g: 0.049999982, b: 0.02, a: 1}
-    - _Hot: {r: 1, g: 0.92, b: 0.45, a: 1}
+    - _Cool: {r: 0.9, g: 0.2, b: 0.05, a: 1}
+    - _Hot: {r: 1, g: 0.6, b: 0.2, a: 1}
     - _Mid: {r: 1, g: 0.45, b: 0.059999965, a: 1}
     - _Scale: {r: 5, g: 3, b: 0, a: 0}
   m_BuildTextureStacks: []
