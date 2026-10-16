@@ -17,6 +17,7 @@ public class Player : MonoBehaviour
     public float maxHealth = 100;
     public float health = 100;
     public Image healthFill;            // HealthBar/Fill in HUD3D — vertical fill, 1 = full health
+    public HurtFeedback hurt;           // screen/camera feedback when we take damage
 
     private void Start()
     {
@@ -55,6 +56,7 @@ public class Player : MonoBehaviour
     public void TakeDamage(float dmg)
     {
         health = Mathf.Max(health - dmg, 0f);
+        if (hurt != null && dmg > 0f) hurt.Hit(dmg);
 
         // No death for now — refill so we can keep practicing
         if (health <= 0f)

@@ -159,7 +159,7 @@ public class GuardJuice : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
     //  SHAKE
     // ══════════════════════════════════════════════════════════════════
-    void Shake(float amount, float duration)
+    public void Shake(float amount, float duration)
     {
         // a stronger shake overrides a weaker one still playing
         float remaining = Mathf.Max(0f, shakeEndTime - Time.unscaledTime) / Mathf.Max(shakeDuration, 0.0001f);

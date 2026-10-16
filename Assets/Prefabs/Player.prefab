@@ -1,5 +1,54 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &208471641148485469
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3035423952153254344}
+  - component: {fileID: 3247941100157471936}
+  m_Layer: 0
+  m_Name: HurtVolume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3035423952153254344
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 208471641148485469}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3880151476537064707}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3247941100157471936
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 208471641148485469}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 11
+  blendDistance: 0
+  weight: 0
+  sharedProfile: {fileID: 11400000, guid: 5f71c0b7df41daa42936857b76b12b9b, type: 2}
 --- !u!1 &339545429281530893
 GameObject:
   m_ObjectHideFlags: 0
@@ -366,6 +415,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 7560210464031150382}
   - {fileID: 3993865248856986804}
   - {fileID: 4635794322806493678}
   - {fileID: 529446961710753317}
@@ -979,6 +1029,7 @@ GameObject:
   - component: {fileID: 7136535019886578245}
   - component: {fileID: 5794157458762835431}
   - component: {fileID: 5879824131008612246}
+  - component: {fileID: 3206692756818802456}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -1002,6 +1053,7 @@ Transform:
   - {fileID: 2252334614163319914}
   - {fileID: 5877338246034059404}
   - {fileID: 2551732876886867926}
+  - {fileID: 3035423952153254344}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!143 &2760431837627851780
@@ -1049,6 +1101,7 @@ MonoBehaviour:
   maxHealth: 100
   health: 100
   healthFill: {fileID: 9194820464634649342}
+  hurt: {fileID: 3206692756818802456}
 --- !u!114 &8213888485866622640
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1291,6 +1344,31 @@ MonoBehaviour:
   shakeFrequency: 28
   ringPulseScale: 0.25
   ringPulseTime: 0.15
+--- !u!114 &3206692756818802456
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5446419775191248859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7940a8180714e2240ad6246ca3e906a8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HurtFeedback
+  volume: {fileID: 3247941100157471936}
+  overlay: {fileID: 3890944569049203464}
+  juice: {fileID: 5879824131008612246}
+  healthBar: {fileID: 4020585457161318814}
+  fullHitDamage: 20
+  overlayAlpha: 0.55
+  attack: 0.04
+  hold: 0.06
+  release: 0.45
+  shake: 1.8
+  shakeTime: 0.25
+  barPunch: 0.25
+  barPunchTime: 0.2
 --- !u!1 &5481123272860611650
 GameObject:
   m_ObjectHideFlags: 0
@@ -1782,6 +1860,81 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_Sprite: {fileID: 4966732595609684114, guid: 92a459220dcbb78419ac64c73d92c992, type: 3}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!1 &9222417941133565254
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7560210464031150382}
+  - component: {fileID: 7260106079692663664}
+  - component: {fileID: 3890944569049203464}
+  m_Layer: 6
+  m_Name: HurtOverlay
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &7560210464031150382
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9222417941133565254}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 302137386028186870}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 3.8, y: 2.12}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!222 &7260106079692663664
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9222417941133565254}
+  m_CullTransparentMesh: 1
+--- !u!114 &3890944569049203464
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9222417941133565254}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.85, g: 0, b: 0, a: 0}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: -4534005519789562886, guid: cc3f0c2d0427d7e49a56de5a0ac81db2, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
