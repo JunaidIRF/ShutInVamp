@@ -20,6 +20,11 @@ public class Shooter : MonoBehaviour
     [Range(0f, 1f)] public float minSpread = 0.5f;
     [Range(0f, 1f)] public float maxSpread = 0.8f;
 
+    [Header("Health")]
+    public float maxHealth = 100f;
+    public float health = 100f;
+    public UnityEngine.UI.Image healthFill;   // world-space bar above the head (horizontal fill)
+
     [Header("Stagger")]
     public float staggerTime = 2f;
     public HitFlash hitFlash;           // red overlay on hit, works on any model's materials
@@ -80,6 +85,9 @@ public class Shooter : MonoBehaviour
             graphicsBasePosition = graphics.localPosition;
             feetBelowPivot = FeetBelowPivot();
         }
+
+        health = maxHealth;
+        UpdateHealthBar();
 
         // Scene reload is off in this project — don't carry a stagger/bounce over from a previous run
         isStaggered = false;
@@ -160,8 +168,13 @@ public class Shooter : MonoBehaviour
     /// <summary>Called when a parried bullet hits us — stop firing for a moment.</summary>
     /// <param name="point">Where the bullet hit our collider.</param>
     /// <param name="direction">The bullet's travel direction.</param>
-    public void Stagger(Vector3 point, Vector3 direction)
+    /// <param name="damage">Damage the parried bullet deals.</param>
+    public void Stagger(Vector3 point, Vector3 direction, float damage)
     {
+        health = Mathf.Max(health - damage, 0f);
+        if (health <= 0f) health = maxHealth;   // no death yet — refill so practice can go on
+        UpdateHealthBar();
+
         // The blood effect sprays along its +Z, so point it back where the shot came from
         // (its stop action doesn't reliably fire with the droplet sub-emitter, so also destroy it on a timer)
         if (bloodFx != null && direction.sqrMagnitude > 0.0001f)
@@ -182,6 +195,11 @@ public class Shooter : MonoBehaviour
             anim.SetTrigger(HitHash);
             anim.SetBool(StunnedHash, true);
         }
+    }
+
+    void UpdateHealthBar()
+    {
+        if (healthFill != null) healthFill.fillAmount = health / maxHealth;
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>
