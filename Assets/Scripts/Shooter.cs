@@ -37,7 +37,10 @@ public class Shooter : MonoBehaviour
 
     [Header("Death")]
     public Ragdoll ragdoll;             // on the model; switched on when health hits 0
-    public float deathImpulse = 12f;    // knock along the killing shot
+    // knock-back along the killing shot, as velocity changes (m/s) so they don't depend on body mass
+    public float deathKnockSpeed = 3.5f;  // whole body
+    public float deathHitSpeed = 6f;      // extra on the body part that was hit
+    public float deathLift = 1.2f;        // a little upward pop so it leaves the ground
 
     [Header("Hit bounce")]
     // Visual only — the collider stays on the root, unscaled. For a rigged model make this a plain
@@ -234,7 +237,7 @@ public class Shooter : MonoBehaviour
 
         if (ownCollider != null) ownCollider.enabled = false;   // the ragdoll's own colliders take over
         if (healthFill != null) healthFill.canvas.gameObject.SetActive(false);
-        if (ragdoll != null) ragdoll.Activate(point, direction.normalized * deathImpulse);
+        if (ragdoll != null) ragdoll.Activate(point, direction, deathKnockSpeed, deathHitSpeed, deathLift);
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>
