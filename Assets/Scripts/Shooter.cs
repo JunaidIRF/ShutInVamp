@@ -23,6 +23,9 @@ public class Shooter : MonoBehaviour
     public float staggerTime = 2f;
     public HitFlash hitFlash;           // red overlay on hit, works on any model's materials
 
+    [Header("Animation")]
+    public Animator anim;               // on the model: Shoot / Hit triggers, Stunned bool
+
     [Header("Hit bounce")]
     // Visual only — the collider stays on the root, unscaled. For a rigged model make this a plain
     // wrapper object above the model (and its Animator), so nothing else drives its scale/position.
@@ -43,6 +46,10 @@ public class Shooter : MonoBehaviour
     float bounceStartTime = float.NegativeInfinity;
     bool bouncing;
 
+    static readonly int ShootHash = Animator.StringToHash("Shoot");
+    static readonly int HitHash = Animator.StringToHash("Hit");
+    static readonly int StunnedHash = Animator.StringToHash("Stunned");
+
     /// <summary>Where reflected bullets aim — the middle of our capsule.</summary>
     public Vector3 AimPoint => ownCollider != null ? ownCollider.bounds.center : transform.position;
 
@@ -59,6 +66,8 @@ public class Shooter : MonoBehaviour
 
         ownCollider = GetComponent<Collider>();
         if (hitFlash == null) hitFlash = GetComponent<HitFlash>();
+        if (anim == null) anim = GetComponentInChildren<Animator>();
+        if (anim != null) anim.SetBool(StunnedHash, false);
 
         if (graphics != null)
         {
@@ -91,6 +100,7 @@ public class Shooter : MonoBehaviour
             if (Time.time < staggerEndTime) return;
 
             isStaggered = false;
+            if (anim != null) anim.SetBool(StunnedHash, false);
             ScheduleNextShot();
         }
 
@@ -108,6 +118,7 @@ public class Shooter : MonoBehaviour
         Vector3 aim = targetCollider != null ? AimAroundBody(targetCollider.bounds) : target.position;
         Bullet bullet = Instantiate(bulletPrefab, muzzle.position, Quaternion.identity);
         bullet.Launch(aim - muzzle.position, bulletSpeed, damage, this);
+        if (anim != null) anim.SetTrigger(ShootHash);
     }
 
     /// <summary>Random point on the target's silhouette as seen from the muzzle, in any direction from its centre.</summary>
@@ -137,6 +148,12 @@ public class Shooter : MonoBehaviour
         bounceStartTime = Time.time;
         bouncing = true;
         if (hitFlash != null) hitFlash.Flash();
+        if (anim != null)
+        {
+            anim.ResetTrigger(ShootHash);
+            anim.SetTrigger(HitHash);
+            anim.SetBool(StunnedHash, true);
+        }
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>
