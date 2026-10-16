@@ -35,6 +35,10 @@ public class Shooter : MonoBehaviour
     [Header("Animation")]
     public Animator anim;               // on the model: Throw / Hit triggers, Stunned bool
 
+    [Header("Death")]
+    public Ragdoll ragdoll;             // on the model; switched on when health hits 0
+    public float deathImpulse = 12f;    // knock along the killing shot
+
     [Header("Hit bounce")]
     // Visual only — the collider stays on the root, unscaled. For a rigged model make this a plain
     // wrapper object above the model (and its Animator), so nothing else drives its scale/position.
@@ -49,6 +53,7 @@ public class Shooter : MonoBehaviour
     float releaseTime = -1f;            // when the current throw lets go of the stake (-1 = not throwing)
     float staggerEndTime;
     bool isStaggered;
+    bool isDead;
 
     Vector3 graphicsBaseScale = Vector3.one;
     Vector3 graphicsBasePosition;
@@ -78,6 +83,8 @@ public class Shooter : MonoBehaviour
         if (hitFlash == null) hitFlash = GetComponent<HitFlash>();
         if (anim == null) anim = GetComponentInChildren<Animator>();
         if (anim != null) anim.SetBool(StunnedHash, false);
+        if (ragdoll == null) ragdoll = GetComponentInChildren<Ragdoll>();
+        isDead = false;
 
         if (graphics != null)
         {
@@ -99,6 +106,7 @@ public class Shooter : MonoBehaviour
 
     void Update()
     {
+        if (isDead) return;
         UpdateBounce();
 
         if (target == null) return;
@@ -171,8 +179,9 @@ public class Shooter : MonoBehaviour
     /// <param name="damage">Damage the parried bullet deals.</param>
     public void Stagger(Vector3 point, Vector3 direction, float damage)
     {
+        if (isDead) return;
+
         health = Mathf.Max(health - damage, 0f);
-        if (health <= 0f) health = maxHealth;   // no death yet — refill so practice can go on
         UpdateHealthBar();
 
         // The blood effect sprays along its +Z, so point it back where the shot came from
@@ -182,12 +191,18 @@ public class Shooter : MonoBehaviour
             Vector3 back = -direction.normalized;
             Destroy(Instantiate(bloodFx, point + back * bloodFxOffset, Quaternion.LookRotation(back)), bloodFxLifetime);
         }
+        if (hitFlash != null) hitFlash.Flash();
+
+        if (health <= 0f)
+        {
+            Die(point, direction);
+            return;
+        }
 
         isStaggered = true;
         staggerEndTime = Time.time + staggerTime;
         bounceStartTime = Time.time;
         bouncing = true;
-        if (hitFlash != null) hitFlash.Flash();
         releaseTime = -1f;                 // a hit cancels a throw that hasn't let go yet
         if (anim != null)
         {
@@ -200,6 +215,26 @@ public class Shooter : MonoBehaviour
     void UpdateHealthBar()
     {
         if (healthFill != null) healthFill.fillAmount = health / maxHealth;
+    }
+
+    /// <summary>Go ragdoll, knocked along the killing shot. The shooter stays dead (no respawn yet).</summary>
+    void Die(Vector3 point, Vector3 direction)
+    {
+        isDead = true;
+        isStaggered = false;
+        releaseTime = -1f;
+
+        // physics must see the real, unsquashed model
+        bouncing = false;
+        if (graphics != null)
+        {
+            graphics.localScale = graphicsBaseScale;
+            graphics.localPosition = graphicsBasePosition;
+        }
+
+        if (ownCollider != null) ownCollider.enabled = false;   // the ragdoll's own colliders take over
+        if (healthFill != null) healthFill.canvas.gameObject.SetActive(false);
+        if (ragdoll != null) ragdoll.Activate(point, direction.normalized * deathImpulse);
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>
