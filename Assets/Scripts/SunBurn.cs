@@ -16,6 +16,7 @@ public class SunBurn : MonoBehaviour
     public Volume volume;                   // BurnVolume: warm grade + orange vignette
     public Image overlay;                   // ScreenFX/BurnOverlay: ScreenFire flames, alpha = strength
     public ParticleSystem[] handFires;      // flames parented to the hands
+    public Light[] handLights;              // small orange point lights in the hand fires
     public Image sunIcon;                   // HUD3D/SunIcon by the health bar: the "you're in sunlight" cue
 
     [Header("Burning")]
@@ -29,6 +30,7 @@ public class SunBurn : MonoBehaviour
     public float flicker = 0.15f;
     public float flickerSpeed = 8f;
     public float fadeSpeed = 4f;            // how fast the burn look follows the state
+    public float handLightIntensity = 1.5f;
 
     [Header("Sun icon")]
     public Color iconShade = new Color(0.7f, 0.7f, 0.7f, 0.3f);
@@ -165,6 +167,13 @@ public class SunBurn : MonoBehaviour
             c.a = overlayAlpha * amount;
             overlay.color = c;
         }
+        if (handLights != null)
+            foreach (var l in handLights)
+            {
+                if (l == null) continue;
+                l.intensity = handLightIntensity * amount;
+                l.enabled = amount > 0.01f;
+            }
     }
 
     static Light FindSun()
