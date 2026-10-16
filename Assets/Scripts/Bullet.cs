@@ -12,7 +12,6 @@ public class Bullet : MonoBehaviour
 
     public float lifetime = 5f;
     public float reflectSpeedMultiplier = 1.5f;
-    public Color reflectedColor = new Color(1f, 0.85f, 0.2f);
 
     [HideInInspector] public Vector3 velocity;
     [HideInInspector] public float damage;
@@ -34,6 +33,14 @@ public class Bullet : MonoBehaviour
         velocity = direction.normalized * speed;
         damage = dmg;
         owner = shooter;
+        FaceVelocity();
+    }
+
+    /// <summary>The projectile model (a stake) points along +Z, so keep it aimed where it's flying.</summary>
+    void FaceVelocity()
+    {
+        if (velocity.sqrMagnitude > 0.0001f)
+            transform.rotation = Quaternion.LookRotation(velocity);
     }
 
     void Update()
@@ -86,9 +93,6 @@ public class Bullet : MonoBehaviour
 
         Vector3 target = owner != null ? owner.AimPoint : transform.position - velocity;
         velocity = (target - transform.position).normalized * Speed * reflectSpeedMultiplier;
-
-        Renderer rend = GetComponent<Renderer>();
-        if (rend != null)
-            rend.material.color = reflectedColor;
+        FaceVelocity();
     }
 }
