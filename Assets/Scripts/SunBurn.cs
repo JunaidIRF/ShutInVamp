@@ -16,6 +16,7 @@ public class SunBurn : MonoBehaviour
     public Volume volume;                   // BurnVolume: warm grade + orange vignette
     public Image overlay;                   // HUD3D/BurnOverlay: orange screen-edge glow
     public ParticleSystem[] handFires;      // flames parented to the hands
+    public Image sunIcon;                   // HUD3D/SunIcon by the health bar: the "you're in sunlight" cue
 
     [Header("Burning")]
     public float igniteTime = 0.3f;         // seconds in light before catching fire
@@ -24,11 +25,16 @@ public class SunBurn : MonoBehaviour
     public float burnTickInterval = 0.5f;   // 5 every 0.5 s = 10 HP/s
 
     [Header("Look")]
-    [Range(0f, 1f)] public float warningWeight = 0.5f;    // grade strength while warming up, before igniting
-    [Range(0f, 1f)] public float overlayAlpha = 0.45f;
+    [Range(0f, 1f)] public float overlayAlpha = 0.3f;
     public float flicker = 0.15f;
     public float flickerSpeed = 8f;
-    public float fadeSpeed = 4f;            // how fast the look follows the state
+    public float fadeSpeed = 4f;            // how fast the burn look follows the state
+
+    [Header("Sun icon")]
+    public Color iconShade = new Color(0.7f, 0.7f, 0.7f, 0.3f);
+    public Color iconSun = new Color(1f, 0.95f, 0.6f, 1f);
+    public Color iconFire = new Color(1f, 0.5f, 0.1f, 1f);
+    public float iconPulse = 0.15f;         // scale pulse while in sun (stronger while burning)
 
     public bool IsLit { get; private set; }
     public bool OnFire { get; private set; }
@@ -52,6 +58,7 @@ public class SunBurn : MonoBehaviour
         IsLit = false;
         SetHandFires(false, true);
         ApplyLook(0f);
+        UpdateSunIcon();
     }
 
     void OnDisable()
@@ -78,10 +85,37 @@ public class SunBurn : MonoBehaviour
             if (player != null) player.TakeDamage(burnTickDamage);   // HurtFeedback pulses on each tick
         }
 
-        float target = OnFire ? 1f : exposure * warningWeight;
-        look = Mathf.MoveTowards(look, target, fadeSpeed * Time.unscaledDeltaTime);
-        float f = OnFire ? (Mathf.PerlinNoise(Time.unscaledTime * flickerSpeed, 0.37f) - 0.5f) * 2f * flicker : 0f;
+        // screen grade only while actually burning — the sun icon is the warning
+        look = Mathf.MoveTowards(look, OnFire ? 1f : 0f, fadeSpeed * Time.unscaledDeltaTime);
+        float f = (Mathf.PerlinNoise(Time.unscaledTime * flickerSpeed, 0.37f) - 0.5f) * 2f * flicker;
         ApplyLook(Mathf.Clamp01(look + f * look));
+        UpdateSunIcon();
+    }
+
+    void UpdateSunIcon()
+    {
+        if (sunIcon == null) return;
+
+        float t = Time.unscaledTime;
+        Color c;
+        float pulse;
+        if (OnFire)
+        {
+            c = iconFire;
+            pulse = iconPulse * 1.5f * Mathf.Abs(Mathf.Sin(t * 10f));
+        }
+        else if (IsLit)
+        {
+            c = Color.Lerp(iconShade, iconSun, 0.6f + 0.4f * exposure);
+            pulse = iconPulse * Mathf.Abs(Mathf.Sin(t * Mathf.Lerp(6f, 14f, exposure)));   // quicker as you heat up
+        }
+        else
+        {
+            c = Color.Lerp(iconShade, iconSun, exposure);   // cools down as exposure drains
+            pulse = 0f;
+        }
+        sunIcon.color = c;
+        sunIcon.rectTransform.localScale = Vector3.one * (1f + pulse);
     }
 
     void Ignite()
