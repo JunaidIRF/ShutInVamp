@@ -24,6 +24,7 @@ public class Shooter : MonoBehaviour
     public float maxHealth = 100f;
     public float health = 100f;
     public UnityEngine.UI.Image healthFill;   // world-space bar above the head (horizontal fill)
+    public HealthBarFx healthBarFx;           // eased fill + white damage trail (drives healthFill when set)
 
     [Header("Stagger")]
     public float staggerTime = 2f;
@@ -217,7 +218,8 @@ public class Shooter : MonoBehaviour
 
     void UpdateHealthBar()
     {
-        if (healthFill != null) healthFill.fillAmount = health / maxHealth;
+        if (healthBarFx != null) healthBarFx.SetValue(health / maxHealth);
+        else if (healthFill != null) healthFill.fillAmount = health / maxHealth;
     }
 
     /// <summary>Go ragdoll, knocked along the killing shot. The shooter stays dead (no respawn yet).</summary>

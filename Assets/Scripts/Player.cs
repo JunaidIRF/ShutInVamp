@@ -17,6 +17,7 @@ public class Player : MonoBehaviour
     public float maxHealth = 100;
     public float health = 100;
     public Image healthFill;            // HealthBar/Fill in HUD3D — vertical fill, 1 = full health
+    public HealthBarFx healthBarFx;     // eased fill + white damage trail (drives healthFill when set)
     public HurtFeedback hurt;           // screen/camera feedback when we take damage
 
     private void Start()
@@ -67,8 +68,7 @@ public class Player : MonoBehaviour
 
     void UpdateHealthBar()
     {
-        if (healthFill == null) return;
-
-        healthFill.fillAmount = health / maxHealth;
+        if (healthBarFx != null) healthBarFx.SetValue(health / maxHealth);
+        else if (healthFill != null) healthFill.fillAmount = health / maxHealth;
     }
 }
