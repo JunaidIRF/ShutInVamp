@@ -12,6 +12,7 @@ public class Shooter : MonoBehaviour
     public float maxFireInterval = 2.4f;
     public float bulletSpeed = 15f;
     public float damage = 20f;
+    public float throwReleaseDelay = 0.28f; // wind-up before the stake leaves the hand (the Throw clip's release frame)
 
     [Header("Spread")]
     // Each shot aims at a random point around the target's body outline (head, feet, sides...),
@@ -27,7 +28,7 @@ public class Shooter : MonoBehaviour
     public float bloodFxOffset = 0.15f; // start just outside our collider, or the drops collide with it and die at once
 
     [Header("Animation")]
-    public Animator anim;               // on the model: Shoot / Hit triggers, Stunned bool
+    public Animator anim;               // on the model: Throw / Hit triggers, Stunned bool
 
     [Header("Hit bounce")]
     // Visual only — the collider stays on the root, unscaled. For a rigged model make this a plain
@@ -40,6 +41,7 @@ public class Shooter : MonoBehaviour
     Collider targetCollider;
     Collider ownCollider;
     float nextFireTime;
+    float releaseTime = -1f;            // when the current throw lets go of the stake (-1 = not throwing)
     float staggerEndTime;
     bool isStaggered;
 
@@ -49,7 +51,7 @@ public class Shooter : MonoBehaviour
     float bounceStartTime = float.NegativeInfinity;
     bool bouncing;
 
-    static readonly int ShootHash = Animator.StringToHash("Shoot");
+    static readonly int ThrowHash = Animator.StringToHash("Throw");
     static readonly int HitHash = Animator.StringToHash("Hit");
     static readonly int StunnedHash = Animator.StringToHash("Stunned");
 
@@ -81,6 +83,7 @@ public class Shooter : MonoBehaviour
 
         // Scene reload is off in this project — don't carry a stagger/bounce over from a previous run
         isStaggered = false;
+        releaseTime = -1f;
         bounceStartTime = float.NegativeInfinity;
         bouncing = false;
         ScheduleNextShot();
@@ -107,21 +110,32 @@ public class Shooter : MonoBehaviour
             ScheduleNextShot();
         }
 
+        if (releaseTime >= 0f)
+        {
+            if (Time.time >= releaseTime)
+            {
+                releaseTime = -1f;
+                Release();
+            }
+            return;
+        }
+
         if (Time.time >= nextFireTime)
         {
-            Fire();
+            // wind up first; the stake leaves the hand at the release frame
+            if (anim != null) anim.SetTrigger(ThrowHash);
+            releaseTime = Time.time + throwReleaseDelay;
             ScheduleNextShot();
         }
     }
 
-    void Fire()
+    void Release()
     {
         if (bulletPrefab == null || muzzle == null) return;
 
         Vector3 aim = targetCollider != null ? AimAroundBody(targetCollider.bounds) : target.position;
         Bullet bullet = Instantiate(bulletPrefab, muzzle.position, Quaternion.identity);
         bullet.Launch(aim - muzzle.position, bulletSpeed, damage, this);
-        if (anim != null) anim.SetTrigger(ShootHash);
     }
 
     /// <summary>Random point on the target's silhouette as seen from the muzzle, in any direction from its centre.</summary>
@@ -161,9 +175,10 @@ public class Shooter : MonoBehaviour
         bounceStartTime = Time.time;
         bouncing = true;
         if (hitFlash != null) hitFlash.Flash();
+        releaseTime = -1f;                 // a hit cancels a throw that hasn't let go yet
         if (anim != null)
         {
-            anim.ResetTrigger(ShootHash);
+            anim.ResetTrigger(ThrowHash);
             anim.SetTrigger(HitHash);
             anim.SetBool(StunnedHash, true);
         }
