@@ -24,6 +24,7 @@ public class Shooter : MonoBehaviour
     public HitFlash hitFlash;           // red overlay on hit, works on any model's materials
     public GameObject bloodFx;          // spawned at the impact point, spraying back towards the shot
     public float bloodFxLifetime = 9f;  // hard cleanup: drops fly up to 5 s, then sit on the floor up to 3.5 s
+    public float bloodFxOffset = 0.15f; // start just outside our collider, or the drops collide with it and die at once
 
     [Header("Animation")]
     public Animator anim;               // on the model: Shoot / Hit triggers, Stunned bool
@@ -150,7 +151,10 @@ public class Shooter : MonoBehaviour
         // The blood effect sprays along its +Z, so point it back where the shot came from
         // (its stop action doesn't reliably fire with the droplet sub-emitter, so also destroy it on a timer)
         if (bloodFx != null && direction.sqrMagnitude > 0.0001f)
-            Destroy(Instantiate(bloodFx, point, Quaternion.LookRotation(-direction)), bloodFxLifetime);
+        {
+            Vector3 back = -direction.normalized;
+            Destroy(Instantiate(bloodFx, point + back * bloodFxOffset, Quaternion.LookRotation(back)), bloodFxLifetime);
+        }
 
         isStaggered = true;
         staggerEndTime = Time.time + staggerTime;
