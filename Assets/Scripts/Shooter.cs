@@ -58,6 +58,7 @@ public class Shooter : MonoBehaviour
     float staggerEndTime;
     bool isStaggered;
     bool isDead;
+    bool isExecuted;                    // a player execution is playing on us (it drives the animator)
 
     Vector3 graphicsBaseScale = Vector3.one;
     Vector3 graphicsBasePosition;
@@ -71,6 +72,10 @@ public class Shooter : MonoBehaviour
 
     /// <summary>Where reflected bullets aim — the middle of our capsule.</summary>
     public Vector3 AimPoint => ownCollider != null ? ownCollider.bounds.center : transform.position;
+
+    public bool IsDead => isDead;
+    /// <summary>Executions need us stunned first (a parried stake or a punch).</summary>
+    public bool CanBeExecuted => !isDead && !isExecuted && isStaggered;
 
     void Start()
     {
@@ -89,6 +94,7 @@ public class Shooter : MonoBehaviour
         if (anim != null) anim.SetBool(StunnedHash, false);
         if (ragdoll == null) ragdoll = GetComponentInChildren<Ragdoll>();
         isDead = false;
+        isExecuted = false;
 
         if (graphics != null)
         {
@@ -110,7 +116,7 @@ public class Shooter : MonoBehaviour
 
     void Update()
     {
-        if (isDead) return;
+        if (isDead || isExecuted) return;
         UpdateBounce();
 
         if (target == null) return;
@@ -181,20 +187,15 @@ public class Shooter : MonoBehaviour
     /// <param name="point">Where the bullet hit our collider.</param>
     /// <param name="direction">The bullet's travel direction.</param>
     /// <param name="damage">Damage the parried bullet deals.</param>
-    public void Stagger(Vector3 point, Vector3 direction, float damage)
+    /// <param name="stunTime">How long we stay stunned; negative = <see cref="staggerTime"/>.</param>
+    public void Stagger(Vector3 point, Vector3 direction, float damage, float stunTime = -1f)
     {
-        if (isDead) return;
+        if (isDead || isExecuted) return;
 
         health = Mathf.Max(health - damage, 0f);
         UpdateHealthBar();
 
-        // The blood effect sprays along its +Z, so point it back where the shot came from
-        // (its stop action doesn't reliably fire with the droplet sub-emitter, so also destroy it on a timer)
-        if (bloodFx != null && direction.sqrMagnitude > 0.0001f)
-        {
-            Vector3 back = -direction.normalized;
-            Destroy(Instantiate(bloodFx, point + back * bloodFxOffset, Quaternion.LookRotation(back)), bloodFxLifetime);
-        }
+        Bleed(point, direction);
         if (hitFlash != null) hitFlash.Flash();
 
         if (health <= 0f)
@@ -204,7 +205,7 @@ public class Shooter : MonoBehaviour
         }
 
         isStaggered = true;
-        staggerEndTime = Time.time + staggerTime;
+        staggerEndTime = Time.time + (stunTime >= 0f ? stunTime : staggerTime);
         bounceStartTime = Time.time;
         bouncing = true;
         releaseTime = -1f;                 // a hit cancels a throw that hasn't let go yet
@@ -216,6 +217,51 @@ public class Shooter : MonoBehaviour
         }
     }
 
+    /// <summary>Blood at <paramref name="point"/>, spraying back against <paramref name="direction"/>.</summary>
+    public void Bleed(Vector3 point, Vector3 direction)
+    {
+        // The blood effect sprays along its +Z, so point it back where the hit came from
+        // (its stop action doesn't reliably fire with the droplet sub-emitter, so also destroy it on a timer)
+        if (bloodFx == null || direction.sqrMagnitude < 0.0001f) return;
+        Vector3 back = -direction.normalized;
+        Destroy(Instantiate(bloodFx, point + back * bloodFxOffset, Quaternion.LookRotation(back)), bloodFxLifetime);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  EXECUTIONS — PlayerExecution plays its victim state on our animator
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>Stop all AI and visual effects that would fight the execution animation.</summary>
+    public void BeginExecution()
+    {
+        isExecuted = true;
+        isStaggered = false;
+        releaseTime = -1f;
+        bouncing = false;
+        if (ownCollider != null) ownCollider.enabled = false;   // the player stands closer than our capsule allows
+        if (graphics != null)
+        {
+            graphics.localScale = graphicsBaseScale;
+            graphics.localPosition = graphicsBasePosition;
+        }
+        if (anim != null)
+        {
+            anim.ResetTrigger(ThrowHash);
+            anim.ResetTrigger(HitHash);
+            anim.SetBool(StunnedHash, false);
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        }
+    }
+
+    /// <summary>The execution's kill moment: hand over to the ragdoll, nudged along <paramref name="direction"/>.</summary>
+    public void FinishExecution(Vector3 point, Vector3 direction)
+    {
+        if (isDead) return;
+        health = 0f;
+        UpdateHealthBar();
+        Die(point, direction, 0.3f);
+    }
+
     void UpdateHealthBar()
     {
         if (healthBarFx != null) healthBarFx.SetValue(health / maxHealth);
@@ -223,9 +269,10 @@ public class Shooter : MonoBehaviour
     }
 
     /// <summary>Go ragdoll, knocked along the killing shot. The shooter stays dead (no respawn yet).</summary>
-    void Die(Vector3 point, Vector3 direction)
+    void Die(Vector3 point, Vector3 direction, float knockScale = 1f)
     {
         isDead = true;
+        isExecuted = false;
         isStaggered = false;
         releaseTime = -1f;
 
@@ -239,7 +286,7 @@ public class Shooter : MonoBehaviour
 
         if (ownCollider != null) ownCollider.enabled = false;   // the ragdoll's own colliders take over
         if (healthFill != null) healthFill.canvas.gameObject.SetActive(false);
-        if (ragdoll != null) ragdoll.Activate(point, direction, deathKnockSpeed, deathHitSpeed, deathLift);
+        if (ragdoll != null) ragdoll.Activate(point, direction, deathKnockSpeed * knockScale, deathHitSpeed * knockScale, deathLift * knockScale);
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>

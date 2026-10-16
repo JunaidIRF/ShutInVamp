@@ -86,6 +86,17 @@ public class PlayerBlock : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
     void HandleGuardInput()
     {
+        // An execution owns the camera and hands: drop the guard without touching mouse look
+        if (PlayerExecution.IsExecuting)
+        {
+            if (isGuarding)
+            {
+                isGuarding = false;
+                if (guardVisuals != null) guardVisuals.SetActive(false);
+            }
+            return;
+        }
+
         // Polled (and ignored while unfocused) so alt-tabbing can't leave the guard stuck on
         bool held = Application.isFocused && Input.GetKey(guardKey);
         if (held != isGuarding) SetGuarding(held);
