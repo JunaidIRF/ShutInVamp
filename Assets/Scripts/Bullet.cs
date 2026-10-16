@@ -59,7 +59,7 @@ public class Bullet : MonoBehaviour
                 Shooter shooter = hit.collider.GetComponentInParent<Shooter>();
                 if (shooter != null)
                 {
-                    shooter.Stagger();
+                    shooter.Stagger(hit.point, velocity.normalized);
                     Destroy(gameObject);
                     return;
                 }

@@ -145,6 +145,7 @@ MonoBehaviour:
   maxSpread: 0.8
   staggerTime: 2
   hitFlash: {fileID: 1246532437220398619}
+  bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
   anim: {fileID: 7817265536408058280}
   graphics: {fileID: 5765462758180595205}
   bounceAmount: 0.35

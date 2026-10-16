@@ -22,6 +22,7 @@ public class Shooter : MonoBehaviour
     [Header("Stagger")]
     public float staggerTime = 2f;
     public HitFlash hitFlash;           // red overlay on hit, works on any model's materials
+    public GameObject bloodFx;          // spawned at the impact point, spraying back towards the shot
 
     [Header("Animation")]
     public Animator anim;               // on the model: Shoot / Hit triggers, Stunned bool
@@ -141,8 +142,14 @@ public class Shooter : MonoBehaviour
     }
 
     /// <summary>Called when a parried bullet hits us — stop firing for a moment.</summary>
-    public void Stagger()
+    /// <param name="point">Where the bullet hit our collider.</param>
+    /// <param name="direction">The bullet's travel direction.</param>
+    public void Stagger(Vector3 point, Vector3 direction)
     {
+        // The blood effect sprays along its +Z, so point it back where the shot came from
+        if (bloodFx != null && direction.sqrMagnitude > 0.0001f)
+            Instantiate(bloodFx, point, Quaternion.LookRotation(-direction));
+
         isStaggered = true;
         staggerEndTime = Time.time + staggerTime;
         bounceStartTime = Time.time;
