@@ -474,6 +474,15 @@ MonoBehaviour:
   bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
   bloodFxLifetime: 9
   bloodFxOffset: 0.15
+  kickRange: 1.3
+  kickReach: 1.7
+  kickMaxAngle: 70
+  kickWindup: 0.35
+  kickCooldown: 3
+  kickDamage: 25
+  kickKnockback: 10
+  kickLift: 3
+  kickParryWindow: 0.1
   anim: {fileID: 7817265536408058280}
   ragdoll: {fileID: 3377334243892157605}
   deathKnockSpeed: 3.5

@@ -151,6 +151,19 @@ public class PlayerBlock : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
     //  HIT RESOLUTION — called by Bullet when it reaches our capsule
     // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A melee hit (the enemy kick) lands now: only a parry pressed within <paramref name="window"/>
+    /// seconds (while guarding) counts — blocking does nothing. True = parried.
+    /// </summary>
+    public bool TryParryMelee(float window)
+    {
+        if (!isGuarding || parryLanded || Time.time - lastParryPress > window) return false;
+        parryLanded = true;
+        Flash(parryFlashColor);
+        if (juice != null) juice.Parry();
+        return true;
+    }
     public void ResolveHit(Bullet bullet)
     {
         // Where on our capsule the bullet actually struck

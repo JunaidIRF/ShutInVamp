@@ -82,6 +82,9 @@ public class PlayerMovement : MonoBehaviour
     public float fovSmoothSpeed = 8f;       // How fast FOV transitions
 
     // ─── Runtime state (read-only from outside) ────────────────────────
+    [Header("Knockback")]
+    public float knockbackDrag = 10f;       // m/s² it slows down by (10 m/s -> ~5 m)
+
     [HideInInspector] public Vector3 velocity;
     [HideInInspector] public bool isGrounded;
     [HideInInspector] public bool isSprinting;
@@ -96,6 +99,8 @@ public class PlayerMovement : MonoBehaviour
     float targetHeight;
     bool movementEnabled = true;
     bool lookEnabled = true;
+
+    Vector3 knockVelocity;      // from Knockback(), decays by knockbackDrag
 
     // ground / landing sync
     bool wasGroundedLastFrame;
@@ -128,6 +133,8 @@ public class PlayerMovement : MonoBehaviour
 
         if (graphics != null)
             graphicsOriginalY = graphics.localPosition.y;
+
+        knockVelocity = Vector3.zero;
     }
 
     void Update()
@@ -152,7 +159,8 @@ public class PlayerMovement : MonoBehaviour
         }
 
         ApplyGravity();
-        controller.Move(velocity * Time.deltaTime);
+        // knockback rides on top of the walk velocity (which HandleMovement rewrites every frame)
+        controller.Move(velocity * Time.deltaTime + KnockbackStep(Time.deltaTime));
 
         if (enableBob && movementEnabled)
             HandleHeadBob();
@@ -501,6 +509,7 @@ public class PlayerMovement : MonoBehaviour
     public void Teleport(Vector3 position)
     {
         velocity = Vector3.zero;
+        knockVelocity = Vector3.zero;
         controller.enabled = false;
         transform.position = position;
         controller.enabled = true;
@@ -521,6 +530,26 @@ public class PlayerMovement : MonoBehaviour
         xRotation = Mathf.Clamp(xRotation, -maxLookAngle, maxLookAngle);
         if (cameraHead != null)
             cameraHead.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+    }
+
+    /// <summary>This frame's knockback movement, integrated exactly so the slide is the same length at any frame rate.</summary>
+    Vector3 KnockbackStep(float dt)
+    {
+        float speed = knockVelocity.magnitude;
+        if (speed < 0.0001f) { knockVelocity = Vector3.zero; return Vector3.zero; }
+        Vector3 dir = knockVelocity / speed;
+        float drag = Mathf.Max(knockbackDrag, 0.0001f);
+        float stopTime = speed / drag;
+        if (dt >= stopTime) { knockVelocity = Vector3.zero; return dir * (0.5f * speed * stopTime); }
+        knockVelocity = dir * (speed - drag * dt);
+        return dir * (speed * dt - 0.5f * drag * dt * dt);
+    }
+
+    /// <summary>Shove the player: horizontal part slides and slows down by knockbackDrag, upward part is a hop.</summary>
+    public void Knockback(Vector3 push)
+    {
+        knockVelocity = new Vector3(push.x, 0f, push.z);
+        if (push.y > 0f) velocity.y = Mathf.Max(velocity.y, push.y);
     }
 
     /// <summary>Set the number of extra air jumps available (takes effect next time player lands).</summary>

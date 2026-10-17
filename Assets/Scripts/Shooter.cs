@@ -33,8 +33,20 @@ public class Shooter : MonoBehaviour
     public float bloodFxLifetime = 9f;  // hard cleanup: drops fly up to 5 s, then sit on the floor up to 3.5 s
     public float bloodFxOffset = 0.15f; // start just outside our collider, or the drops collide with it and die at once
 
+    [Header("Kick")]
+    // when the player gets close (and we're not stunned) we kick them away
+    public float kickRange = 1.3f;       // starts a kick when the player is this close (flat distance)
+    public float kickReach = 1.7f;       // still connects at the impact frame if they're within this
+    public float kickMaxAngle = 70f;     // ... and roughly in front of us
+    public float kickWindup = 0.35f;     // the Kick clip's impact frame
+    public float kickCooldown = 3f;
+    public float kickDamage = 25f;
+    public float kickKnockback = 10f;    // m/s backwards (~5 m with the player's knockback drag)
+    public float kickLift = 3f;          // m/s upward hop
+    public float kickParryWindow = 0.1f; // the right-click must land this close before impact (stakes: 0.2)
+
     [Header("Animation")]
-    public Animator anim;               // on the model: Throw / Hit triggers, Stunned bool
+    public Animator anim;               // on the model: Throw / Hit / Kick triggers, Stunned bool
 
     [Header("Death")]
     public Ragdoll ragdoll;             // on the model; switched on when health hits 0
@@ -55,6 +67,8 @@ public class Shooter : MonoBehaviour
     Collider ownCollider;
     float nextFireTime;
     float releaseTime = -1f;            // when the current throw lets go of the stake (-1 = not throwing)
+    float kickImpactTime = -1f;         // when the current kick lands (-1 = not kicking)
+    float nextKickTime;
     float staggerEndTime;
     bool isStaggered;
     bool isDead;
@@ -69,6 +83,7 @@ public class Shooter : MonoBehaviour
     static readonly int ThrowHash = Animator.StringToHash("Throw");
     static readonly int HitHash = Animator.StringToHash("Hit");
     static readonly int StunnedHash = Animator.StringToHash("Stunned");
+    static readonly int KickHash = Animator.StringToHash("Kick");
 
     /// <summary>Where reflected bullets aim — the middle of our capsule.</summary>
     public Vector3 AimPoint => ownCollider != null ? ownCollider.bounds.center : transform.position;
@@ -109,6 +124,8 @@ public class Shooter : MonoBehaviour
         // Scene reload is off in this project — don't carry a stagger/bounce over from a previous run
         isStaggered = false;
         releaseTime = -1f;
+        kickImpactTime = -1f;
+        nextKickTime = 0f;
         bounceStartTime = float.NegativeInfinity;
         bouncing = false;
         ScheduleNextShot();
@@ -136,6 +153,16 @@ public class Shooter : MonoBehaviour
             ScheduleNextShot();
         }
 
+        if (kickImpactTime >= 0f)
+        {
+            if (Time.time >= kickImpactTime)
+            {
+                kickImpactTime = -1f;
+                KickImpact();
+            }
+            return;
+        }
+
         if (releaseTime >= 0f)
         {
             if (Time.time >= releaseTime)
@@ -146,6 +173,14 @@ public class Shooter : MonoBehaviour
             return;
         }
 
+        if (Time.time >= nextKickTime && TargetInFront(kickRange))
+        {
+            if (anim != null) anim.SetTrigger(KickHash);
+            kickImpactTime = Time.time + kickWindup;
+            nextKickTime = Time.time + kickCooldown;
+            return;
+        }
+
         if (Time.time >= nextFireTime)
         {
             // wind up first; the stake leaves the hand at the release frame
@@ -153,6 +188,34 @@ public class Shooter : MonoBehaviour
             releaseTime = Time.time + throwReleaseDelay;
             ScheduleNextShot();
         }
+    }
+
+    bool TargetInFront(float range)
+    {
+        Vector3 to = target.position - transform.position;
+        to.y = 0f;
+        return to.magnitude <= range && Vector3.Angle(transform.forward, to) <= kickMaxAngle;
+    }
+
+    /// <summary>The kick's impact frame: parried = we're stunned; otherwise damage + knockback (if still in reach).</summary>
+    void KickImpact()
+    {
+        ScheduleNextShot();   // don't throw straight after a kick
+        if (target == null || !TargetInFront(kickReach)) return;   // they stepped back: whiff
+
+        var block = target.GetComponent<PlayerBlock>();
+        if (block != null && block.TryParryMelee(kickParryWindow))
+        {
+            Stun(staggerTime);
+            return;
+        }
+
+        var player = target.GetComponent<Player>();
+        if (player != null) player.TakeDamage(kickDamage);
+        var move = target.GetComponent<PlayerMovement>();
+        Vector3 away = target.position - transform.position;
+        away.y = 0f;
+        if (move != null) move.Knockback(away.normalized * kickKnockback + Vector3.up * kickLift);
     }
 
     void Release()
@@ -204,14 +267,22 @@ public class Shooter : MonoBehaviour
             return;
         }
 
+        Stun(stunTime >= 0f ? stunTime : staggerTime);
+    }
+
+    /// <summary>Stunned for <paramref name="time"/> s: hit reaction, bounce, any throw or kick in progress cancelled.</summary>
+    void Stun(float time)
+    {
         isStaggered = true;
-        staggerEndTime = Time.time + (stunTime >= 0f ? stunTime : staggerTime);
+        staggerEndTime = Time.time + time;
         bounceStartTime = Time.time;
         bouncing = true;
         releaseTime = -1f;                 // a hit cancels a throw that hasn't let go yet
+        kickImpactTime = -1f;              // ... and a kick that hasn't landed
         if (anim != null)
         {
             anim.ResetTrigger(ThrowHash);
+            anim.ResetTrigger(KickHash);
             anim.SetTrigger(HitHash);
             anim.SetBool(StunnedHash, true);
         }
@@ -237,6 +308,7 @@ public class Shooter : MonoBehaviour
         isExecuted = true;
         isStaggered = false;
         releaseTime = -1f;
+        kickImpactTime = -1f;
         bouncing = false;
         if (ownCollider != null) ownCollider.enabled = false;   // the player stands closer than our capsule allows
         if (graphics != null)
@@ -248,6 +320,7 @@ public class Shooter : MonoBehaviour
         {
             anim.ResetTrigger(ThrowHash);
             anim.ResetTrigger(HitHash);
+            anim.ResetTrigger(KickHash);
             anim.SetBool(StunnedHash, false);
             anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         }
@@ -278,6 +351,7 @@ public class Shooter : MonoBehaviour
         isExecuted = false;
         isStaggered = false;
         releaseTime = -1f;
+        kickImpactTime = -1f;
 
         // physics must see the real, unsquashed model
         bouncing = false;
