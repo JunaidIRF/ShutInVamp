@@ -9097,9 +9097,9 @@ MonoBehaviour:
   punchHitDelay: 0.1
   punchShake: 0.8
   clawSound:
-    clip: {fileID: 8300000, guid: 58692d261938a0a4cb46a8de2cfe7919, type: 3}
-    volume: 0.65
-    pitch: {x: 1.1, y: 1.35}
+    clip: {fileID: 8300000, guid: 3eee824139361c54bb8eb962ac023ea2, type: 3}
+    volume: 0.7
+    pitch: {x: 1, y: 1.25}
     spatial: 0
   clawHitSound:
     clip: {fileID: 8300000, guid: 8cd8a96b8f55e4e44b421757e942fa43, type: 3}
@@ -9326,9 +9326,9 @@ MonoBehaviour:
   parryTag: Parry
   juice: {fileID: 5879824131008612246}
   parrySwingSound:
-    clip: {fileID: 8300000, guid: 58692d261938a0a4cb46a8de2cfe7919, type: 3}
-    volume: 0.7
-    pitch: {x: 0.9, y: 1.12}
+    clip: {fileID: 8300000, guid: 3eee824139361c54bb8eb962ac023ea2, type: 3}
+    volume: 0.75
+    pitch: {x: 0.82, y: 0.98}
     spatial: 0
   parrySound:
     clip: {fileID: 8300000, guid: e9875c052bddfe146a424f47bee56d71, type: 3}
@@ -9339,6 +9339,11 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 227c71fd11a39df478479a554af8a85a, type: 3}
     volume: 0.9
     pitch: {x: 0.92, y: 1.08}
+    spatial: 0
+  stakeHitSound:
+    clip: {fileID: 8300000, guid: 4699f372b25eb2e4db690528a1bdb49d, type: 3}
+    volume: 0.9
+    pitch: {x: 0.9, y: 1.1}
     spatial: 0
   threats: {fileID: 2338265075378460233}
   guardVisuals: {fileID: 3031849400596410963}

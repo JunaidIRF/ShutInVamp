@@ -39,6 +39,7 @@ public class PlayerBlock : MonoBehaviour
     public Sfx parrySwingSound;             // every parry press: the swipe through the air
     public Sfx parrySound;                  // a parry landed (once per parry, however many stakes / kicks it catches)
     public Sfx blockSound;                  // a stake taken on the guard
+    public Sfx stakeHitSound;               // a stake getting through: we're hit
 
     [Header("UI")]
     public ThreatIndicator threats;         // the outer ring for attacks from outside the guard (behind / far to the side)
@@ -294,6 +295,7 @@ public class PlayerBlock : MonoBehaviour
         }
         else
         {
+            stakeHitSound?.Play();
             player.TakeDamage(bullet.damage);
             HitPop();
             HitFromDirection(from);
