@@ -35,7 +35,8 @@ public class Player : MonoBehaviour
     public float punchShake = 0.8f;     // degrees
 
     [Header("Sound")]
-    public Sfx clawSound;               // every claw swing
+    public Sfx clawSound;               // every claw swing (the swipe through the air)
+    public Sfx clawHitSound;            // the claws landing on an enemy
 
     float pendingPunchTime = -1f;
     float nextClawSound;
@@ -101,6 +102,7 @@ public class Player : MonoBehaviour
         // A cast that starts inside the collider reports no point: any point on the aim line will do
         Vector3 point = hit.distance > 0f ? hit.point : cam.position;
         shooter.Hit(point, cam.forward, punchDamage, severOnKill: true);
+        clawHitSound?.Play();
         if (juice != null) juice.Shake(punchShake, 0.15f);
     }
 

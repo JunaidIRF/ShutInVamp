@@ -9097,9 +9097,14 @@ MonoBehaviour:
   punchHitDelay: 0.1
   punchShake: 0.8
   clawSound:
+    clip: {fileID: 8300000, guid: 58692d261938a0a4cb46a8de2cfe7919, type: 3}
+    volume: 0.65
+    pitch: {x: 1.1, y: 1.35}
+    spatial: 0
+  clawHitSound:
     clip: {fileID: 8300000, guid: 8cd8a96b8f55e4e44b421757e942fa43, type: 3}
-    volume: 0.8
-    pitch: {x: 0.88, y: 1.12}
+    volume: 0.9
+    pitch: {x: 0.9, y: 1.1}
     spatial: 0
 --- !u!114 &8213888485866622640
 MonoBehaviour:
