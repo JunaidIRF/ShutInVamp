@@ -8,7 +8,8 @@ using UnityEngine.UI;
 /// briefly after reaching shade. Safe exactly where the scene draws shadow.
 /// Drives a warm grade + flickering edge glow (a warning while warming up) and flames on the hands.
 /// Bare, the sun kills in a couple of seconds. Every kill feeds a sun ward (seconds of protection, capped):
-/// while it lasts the sun only singes, and it drains while you're in the light — enough to dash across a street.
+/// while it lasts you don't burn at all (no fire, no burn look), and it drains while you're in the light — enough
+/// to dash across a street.
 /// </summary>
 public class SunBurn : MonoBehaviour
 {
@@ -30,7 +31,6 @@ public class SunBurn : MonoBehaviour
     [Header("Sun ward (kills buy time in the sun)")]
     public float wardPerKill = 2f;          // s of protection each kill gives...
     public float wardMax = 8f;              // ...stacking up to this
-    public float wardedTickDamage = 0.8f;   // per tick while it holds (0.8 every 0.2 s = 4 HP/s): it still singes
     public RectTransform wardFill;          // HUD3D/WardBar/Fill: x scale = how much ward is left
     public Graphic wardFillGraphic;         // flashes bright when a kill tops it up
     public Color wardColor = new Color(1f, 0.42f, 0.12f, 1f);
@@ -53,6 +53,7 @@ public class SunBurn : MonoBehaviour
     public Color iconShade = new Color(0.7f, 0.7f, 0.7f, 0.3f);
     public Color iconSun = new Color(1f, 0.95f, 0.6f, 1f);
     public Color iconFire = new Color(1f, 0.5f, 0.1f, 1f);
+    public Color iconWarded = new Color(1f, 0.42f, 0.12f, 0.85f);   // in the sun on the ward
     public float iconPulse = 0.15f;         // scale pulse while in sun (stronger while burning)
 
     public bool IsLit { get; private set; }
@@ -156,19 +157,23 @@ public class SunBurn : MonoBehaviour
         IsLit = CheckLit();
         float dt = Time.deltaTime;
 
-        exposure = Mathf.Clamp01(exposure + (IsLit ? dt : -dt) / Mathf.Max(igniteTime, 0.0001f));
-        if (IsLit) lastLitTime = Time.time;
-        if (IsLit) Ward = Mathf.Max(0f, Ward - dt);
+        // the ward takes the sun while it lasts: it drains instead of you warming up
+        if (IsLit && Ward > 0f) Ward = Mathf.Max(0f, Ward - dt);
+        bool burning = IsLit && Ward <= 0f;
         wardFlash = Mathf.MoveTowards(wardFlash, 0f, Time.unscaledDeltaTime * 2.5f);
         UpdateWardBar();
 
+        exposure = Mathf.Clamp01(exposure + (burning ? dt : -dt) / Mathf.Max(igniteTime, 0.0001f));
+        if (burning) lastLitTime = Time.time;
+
         if (!OnFire && exposure >= 1f) Ignite();
-        else if (OnFire && !IsLit && Time.time - lastLitTime > lingerTime) Extinguish();
+        else if (OnFire && Ward > 0f) Extinguish();   // a kill while burning puts it out
+        else if (OnFire && !burning && Time.time - lastLitTime > lingerTime) Extinguish();
 
         if (OnFire && Time.time >= nextTickTime)
         {
             nextTickTime = Time.time + burnTickInterval;
-            if (player != null) player.TakeDamage(Ward > 0f ? wardedTickDamage : burnTickDamage);   // HurtFeedback pulses on each tick
+            if (player != null) player.TakeDamage(burnTickDamage);   // HurtFeedback pulses on each tick
             burnTick?.Play();
         }
         UpdateLoop();
@@ -191,6 +196,11 @@ public class SunBurn : MonoBehaviour
         {
             c = iconFire;
             pulse = iconPulse * 1.5f * Mathf.Abs(Mathf.Sin(t * 10f));
+        }
+        else if (IsLit && Ward > 0f)
+        {
+            c = iconWarded;
+            pulse = iconPulse * 0.5f * Mathf.Abs(Mathf.Sin(t * 4f));   // calm: the ward has it
         }
         else if (IsLit)
         {
