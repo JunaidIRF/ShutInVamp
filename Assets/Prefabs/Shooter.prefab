@@ -483,7 +483,9 @@ MonoBehaviour:
   retreatSpeed: 4.3
   repathInterval: 0.25
   legsBlendSpeed: 6
-  walkAnimSpeed: 3.5
+  runAnimSpeed: 3.5
+  hipTurnSpeed: 540
+  backpedalAngle: 112
   spreadDistance: 4
   strafeAngle: 30
   kickRange: 2.5

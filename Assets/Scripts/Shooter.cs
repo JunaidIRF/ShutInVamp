@@ -54,7 +54,9 @@ public class Shooter : MonoBehaviour
     public float retreatSpeed = 2.5f;
     public float repathInterval = 0.25f;
     public float legsBlendSpeed = 6f;   // how fast the walk layer fades in/out
-    public float walkAnimSpeed = 3.5f;  // the speed the walk clip is made for (it plays faster/slower to match)
+    public float runAnimSpeed = 3.5f;   // the Run clip's own speed: above it the run plays faster so feet stay planted
+    public float hipTurnSpeed = 540f;   // deg/s the legs turn towards the movement direction
+    public float backpedalAngle = 112f; // moving more than this away from where we face = backpedal
     public float spreadDistance = 4f;   // keep at least this far from other enemies
     public float strafeAngle = 30f;     // how far round the player we step to get clear (degrees)
 
@@ -130,6 +132,11 @@ public class Shooter : MonoBehaviour
     float nextRepath;
     bool hasSight;
     int legsLayer = -1;
+    float legYaw;                       // how far the legs are turned from the torso (deg, towards the movement)
+    bool backpedal;
+    Transform hipsBone, spineBone, spine1Bone, spine2Bone;
+    Quaternion hipsRest;                // the hips' rest rotation (nothing animates it, so we own it)
+    bool hipsTurned;
     float legsWeight;
 
     /// <summary>Where reflected bullets aim — the middle of our capsule.</summary>
@@ -165,6 +172,17 @@ public class Shooter : MonoBehaviour
         hasSight = false;
         legsWeight = 0f;
         legsLayer = anim != null ? anim.GetLayerIndex("Legs") : -1;
+        legYaw = 0f;
+        backpedal = false;
+        if (anim != null)
+        {
+            hipsBone = FindDeep(anim.transform, "mixamorig:Hips");
+            spineBone = FindDeep(anim.transform, "mixamorig:Spine");
+            spine1Bone = FindDeep(anim.transform, "mixamorig:Spine1");
+            spine2Bone = FindDeep(anim.transform, "mixamorig:Spine2");
+            if (hipsBone != null) hipsRest = hipsBone.localRotation;
+            hipsTurned = false;
+        }
         if (legsLayer >= 0) anim.SetLayerWeight(legsLayer, 0f);
         if (agent != null)
         {
@@ -445,18 +463,32 @@ public class Shooter : MonoBehaviour
         }
     }
 
-    /// <summary>Walk layer follows how fast we actually move (forward / backward relative to where we face).</summary>
+    /// <summary>
+    /// Legs follow how we actually move: the gait blend gets the signed speed in m/s (walk/run, forward or
+    /// backpedal) and the legs turn towards the movement direction (applied in LateUpdate), so any direction
+    /// is a forward run or a backpedal with the hips turned — while the torso keeps facing the player.
+    /// </summary>
     void UpdateWalkAnim()
     {
         if (anim == null || legsLayer < 0) return;
         Vector3 v = AgentReady ? agent.velocity : Vector3.zero;
         v.y = 0f;
         float speed = v.magnitude;
-        float along = Vector3.Dot(v, transform.forward);
-        // walking forward or sideways uses the forward walk, clearly backwards the back walk
-        anim.SetFloat(MoveSpeedHash, speed < 0.3f ? 0f : (along < -0.3f * speed ? -1f : 1f));
-        anim.SetFloat(WalkRateHash, Mathf.Clamp(speed / Mathf.Max(walkAnimSpeed, 0.01f), 0.5f, 2f));
-        float want = Mathf.Clamp01(v.magnitude / 1f);   // fully walking from 1 m/s
+
+        float yawTarget = 0f;
+        if (speed > 0.2f)
+        {
+            float phi = Vector3.SignedAngle(transform.forward, v, Vector3.up);
+            // switch forward <-> backpedal with a little hysteresis so it doesn't flicker at the edge
+            if (backpedal && Mathf.Abs(phi) < backpedalAngle - 10f) backpedal = false;
+            else if (!backpedal && Mathf.Abs(phi) > backpedalAngle + 10f) backpedal = true;
+            yawTarget = backpedal ? Mathf.DeltaAngle(0f, phi - 180f) : phi;
+        }
+        legYaw = Mathf.MoveTowardsAngle(legYaw, yawTarget, hipTurnSpeed * Time.deltaTime);
+
+        anim.SetFloat(MoveSpeedHash, backpedal ? -speed : speed, 0.1f, Time.deltaTime);
+        anim.SetFloat(WalkRateHash, Mathf.Max(1f, speed / Mathf.Max(runAnimSpeed, 0.01f)));
+        float want = Mathf.Clamp01(speed / 0.5f);   // the blend tree handles walk vs run; this just fades standing
         legsWeight = Mathf.MoveTowards(legsWeight, want, legsBlendSpeed * Time.deltaTime);
         anim.SetLayerWeight(legsLayer, legsWeight);
     }
@@ -464,7 +496,48 @@ public class Shooter : MonoBehaviour
     void SetLegsWeight(float w)
     {
         legsWeight = w;
+        if (w <= 0f) legYaw = 0f;
         if (anim != null && legsLayer >= 0) anim.SetLayerWeight(legsLayer, w);
+    }
+
+    /// <summary>After the Animator: turn the legs (hips) towards the movement and untwist the spine so
+    /// chest, arms and head stay aimed at the player. The Animator never writes the hips' rotation (no clip
+    /// changes it), so it's set absolutely from its rest each frame — never added on top of last frame's.
+    /// The spine is rewritten by the Animator every frame, so its counter-turn is relative.</summary>
+    void LateUpdate()
+    {
+        if (isDead || isExecuted || hipsBone == null) return;
+        float yaw = legYaw * legsWeight;
+        if (Mathf.Abs(yaw) < 0.01f)
+        {
+            ResetHips();
+            return;
+        }
+        Vector3 up = transform.up;
+        hipsBone.localRotation = hipsRest;
+        hipsBone.rotation = Quaternion.AngleAxis(yaw, up) * hipsBone.rotation;
+        hipsTurned = true;
+        if (spineBone != null) spineBone.rotation = Quaternion.AngleAxis(-yaw * 0.5f, up) * spineBone.rotation;
+        if (spine1Bone != null) spine1Bone.rotation = Quaternion.AngleAxis(-yaw * 0.3f, up) * spine1Bone.rotation;
+        if (spine2Bone != null) spine2Bone.rotation = Quaternion.AngleAxis(-yaw * 0.2f, up) * spine2Bone.rotation;
+    }
+
+    void ResetHips()
+    {
+        if (!hipsTurned || hipsBone == null) return;
+        hipsBone.localRotation = hipsRest;
+        hipsTurned = false;
+    }
+
+    static Transform FindDeep(Transform root, string name)
+    {
+        if (root.name == name) return root;
+        foreach (Transform c in root)
+        {
+            Transform f = FindDeep(c, name);
+            if (f != null) return f;
+        }
+        return null;
     }
 
     /// <summary>The kick is over (landed, or cancelled by a stun / execution / death).</summary>
@@ -623,6 +696,7 @@ public class Shooter : MonoBehaviour
         EndKick();
         StopMoving();
         SetLegsWeight(0f);   // the execution clip owns the legs
+        ResetHips();
         bouncing = false;
         if (ownCollider != null) ownCollider.enabled = false;   // the player stands closer than our capsule allows
         if (graphics != null)
@@ -669,6 +743,7 @@ public class Shooter : MonoBehaviour
         StopMoving();
         if (agent != null) agent.enabled = false;   // the ragdoll moves on its own now
         SetLegsWeight(0f);
+        ResetHips();
 
         // physics must see the real, unsquashed model
         bouncing = false;
