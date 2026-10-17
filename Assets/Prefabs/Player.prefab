@@ -8580,6 +8580,8 @@ MonoBehaviour:
   incomingTemplate: {fileID: 899237687363940655}
   incomingArc: 40
   kickArc: 60
+  kickColor: {r: 1, g: 0.55, b: 0.05, a: 1}
+  kickPulseSpeed: 7
   warnTime: 1.5
   guardColor: {r: 1, g: 1, b: 1, a: 1}
   blockFlashColor: {r: 0.5, g: 0.8, b: 1, a: 1}

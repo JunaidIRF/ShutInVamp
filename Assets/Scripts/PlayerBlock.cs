@@ -38,6 +38,8 @@ public class PlayerBlock : MonoBehaviour
     public Image incomingTemplate;          // red arc cloned per incoming bullet
     public float incomingArc = 40f;
     public float kickArc = 60f;             // the kick warning at the bottom of the ring
+    public Color kickColor = new Color(1f, 0.55f, 0.05f, 1f);   // orange, so it never reads as a stake
+    public float kickPulseSpeed = 7f;       // the warning pulses steadily (it doesn't count down to impact)
     public float warnTime = 1.5f;           // indicator reaches full strength this close to impact
     public Color guardColor = Color.white;
     public Color blockFlashColor = new Color(0.5f, 0.8f, 1f);
@@ -259,7 +261,8 @@ public class PlayerBlock : MonoBehaviour
             arc.color = c;
         }
 
-        // kicks: a red warning at the bottom of the ring for the whole wind-up, strongest at impact
+        // kicks: an orange warning at the bottom of the ring for the whole wind-up, pulsing steadily
+        // (no countdown: when to parry has to be read off the kick itself)
         foreach (Shooter s in Shooter.Kicking)
         {
             if (s == null) continue;
@@ -268,9 +271,8 @@ public class PlayerBlock : MonoBehaviour
             Image arc = incomingPool[used++];
             arc.gameObject.SetActive(true);
             PlaceArc(arc, 180f, kickArc);
-            Color c = incomingTemplate.color;
-            float k = 1f - Mathf.Clamp01(s.KickTimeToImpact / Mathf.Max(s.kickWindup, 0.0001f));
-            c.a = Mathf.Lerp(0.45f, 1f, k);
+            Color c = kickColor;
+            c.a = kickColor.a * Mathf.Lerp(0.55f, 1f, Mathf.PingPong(Time.time * kickPulseSpeed, 1f));
             arc.color = c;
         }
 

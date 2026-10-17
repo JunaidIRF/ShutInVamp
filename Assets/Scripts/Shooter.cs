@@ -47,12 +47,14 @@ public class Shooter : MonoBehaviour
     public float kickLungeMax = 2f;      // never lunges further than this
     public float kickReach = 1.7f;       // still connects at the impact frame if they're within this
     public float kickMaxAngle = 70f;     // ... and roughly in front of us
-    public float kickWindup = 0.5f;      // the Kick state's impact moment (clip impact 0.35 s at state speed 0.7)
+    public float kickWindupMin = 0.4f;   // each kick lands a random time into its wind-up (the clip is sped up /
+    public float kickWindupMax = 0.65f;  // slowed down to match), so the timing has to be read off the leg
+    public float kickClipImpact = 0.35f; // the Kick clip's impact frame at normal speed
     public float kickCooldown = 3f;
     public float kickDamage = 25f;
     public float kickKnockback = 10f;    // m/s backwards (~5 m with the player's knockback drag)
     public float kickLift = 3f;          // m/s upward hop
-    public float kickParryWindow = 0.1f; // the right-click must land this close before impact (stakes: 0.2)
+    public float kickParryWindow = 0.06f; // the right-click must land this close before impact (stakes: 0.2)
 
     [Header("Animation")]
     public Animator anim;               // on the model: Throw / Hit / Kick triggers, Stunned bool
@@ -77,6 +79,7 @@ public class Shooter : MonoBehaviour
     float nextFireTime;
     float releaseTime = -1f;            // when the current throw lets go of the stake (-1 = not throwing)
     float kickImpactTime = -1f;         // when the current kick lands (-1 = not kicking)
+    float kickWindup = 0.5f;            // this kick's wind-up (random per kick)
     float nextKickTime;
     Vector3 lungeFrom, lungeTo;
 
@@ -97,6 +100,7 @@ public class Shooter : MonoBehaviour
     static readonly int HitHash = Animator.StringToHash("Hit");
     static readonly int StunnedHash = Animator.StringToHash("Stunned");
     static readonly int KickHash = Animator.StringToHash("Kick");
+    static readonly int KickSpeedHash = Animator.StringToHash("KickSpeed");
 
     /// <summary>Where reflected bullets aim — the middle of our capsule.</summary>
     public Vector3 AimPoint => ownCollider != null ? ownCollider.bounds.center : transform.position;
@@ -219,7 +223,12 @@ public class Shooter : MonoBehaviour
 
     void StartKick()
     {
-        if (anim != null) anim.SetTrigger(KickHash);
+        kickWindup = Random.Range(kickWindupMin, Mathf.Max(kickWindupMin, kickWindupMax));
+        if (anim != null)
+        {
+            anim.SetFloat(KickSpeedHash, kickClipImpact / Mathf.Max(kickWindup, 0.01f));
+            anim.SetTrigger(KickHash);
+        }
         kickImpactTime = Time.time + kickWindup;
         nextKickTime = Time.time + kickCooldown;
         if (!Kicking.Contains(this)) Kicking.Add(this);

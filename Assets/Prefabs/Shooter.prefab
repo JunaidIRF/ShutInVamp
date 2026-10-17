@@ -479,12 +479,14 @@ MonoBehaviour:
   kickLungeMax: 2
   kickReach: 1.7
   kickMaxAngle: 70
-  kickWindup: 0.5
+  kickWindupMin: 0.4
+  kickWindupMax: 0.65
+  kickClipImpact: 0.35
   kickCooldown: 3
   kickDamage: 25
   kickKnockback: 13.5
   kickLift: 4
-  kickParryWindow: 0.1
+  kickParryWindow: 0.06
   anim: {fileID: 7817265536408058280}
   ragdoll: {fileID: 3377334243892157605}
   deathKnockSpeed: 3.5
