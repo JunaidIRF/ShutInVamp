@@ -8,7 +8,7 @@ using UnityEngine.AI;
 /// once (another comes in as one dies), at spawn points round the arena: away from the player, out of their
 /// view where possible, announced by a smoke puff a moment before. Clearing a wave heals the player and gives
 /// a break before the next, harder one (more enemies, more at once, sooner, tougher). Dead bodies sink into
-/// the ground after a while. If the player dies the run is over: everyone stops, "YOU DIED", and after a
+/// the ground after a while. If the player dies the run is over: every enemy is gone at once, "YOU DIED", and after a
 /// pause it starts again from wave 1.
 ///
 /// With blocks set, enemies only come in from the blocks next to the one you're in (so moving through the city
@@ -239,12 +239,7 @@ public class WaveDirector : MonoBehaviour
         pending = 0;
         toSpawn = 0;
         arriving.Clear();
-        foreach (var s in alive)
-        {
-            if (s == null || s.IsDead) continue;
-            s.target = null;   // they stop fighting
-            if (s.agent != null && s.agent.enabled && s.agent.isOnNavMesh) s.agent.isStopped = true;
-        }
+        ClearArena();          // everyone gone at once (stopped enemies would just walk on the spot)
         // no dying again and again where you fell (the sun) while the run waits to start over
         if (sunBurn != null) sunBurn.enabled = false;
         if (movement != null && !movement.Held) movement.Hold(true);
