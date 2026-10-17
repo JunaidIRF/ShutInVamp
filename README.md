@@ -57,7 +57,6 @@ Clone the repository, open it in **Unity 6000.6.5f1** and play the `MainMenu` sc
 ```bash
 git clone https://github.com/JunaidIRF/ShutInVamp.git
 ```
-
 <p align="center">
   <img src="extra_assets/outroPic.png" alt="Hunter" width="70%">
 </p>
