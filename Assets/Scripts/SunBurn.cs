@@ -9,8 +9,8 @@ using UnityEngine.UI;
 /// briefly after reaching shade. Safe exactly where the scene draws shadow.
 /// Drives a warm grade + flickering edge glow (a warning while warming up) and flames on the hands.
 /// Bare, the sun kills in a couple of seconds. Every execution (not a plain kill) feeds a sun ward (seconds of protection, capped):
-/// while it lasts you don't burn at all (no fire, no burn look), and it drains while you're in the light — enough
-/// to dash across a street.
+/// while it lasts you don't burn at all (no fire, no damage; just the orange glow as a reminder), and it drains
+/// while you're in the light — enough to dash across a street.
 /// </summary>
 public class SunBurn : MonoBehaviour
 {
@@ -33,7 +33,7 @@ public class SunBurn : MonoBehaviour
     [FormerlySerializedAs("wardPerKill")]
     public float wardPerExecution = 4f;     // s of protection each execution gives (plain kills give none)...
     public float wardMax = 8f;              // ...stacking up to this
-    public RectTransform wardFill;          // HUD3D/WardBar/Fill: x scale = how much ward is left
+    public HealthBarFx wardBar;             // HUD3D/WardBar: eased fill + white trail of what the sun just took
     public Graphic wardFillGraphic;         // flashes bright when an execution tops it up
     public Color wardColor = new Color(1f, 0.42f, 0.12f, 1f);
     public Color wardGainColor = new Color(1f, 0.9f, 0.55f, 1f);
@@ -46,6 +46,7 @@ public class SunBurn : MonoBehaviour
 
     [Header("Look")]
     [Range(0f, 1f)] public float overlayAlpha = 0.3f;
+    [Range(0f, 1f)] public float wardedGlow = 0.6f;   // the orange screen glow in the sun on the ward (no flames)
     public float flicker = 0.15f;
     public float flickerSpeed = 8f;
     public float fadeSpeed = 4f;            // how fast the burn look follows the state
@@ -68,7 +69,8 @@ public class SunBurn : MonoBehaviour
     float exposure;                         // 0..1 warming up towards igniting
     float lastLitTime;
     float nextTickTime;
-    float look;                             // smoothed 0..1 visual intensity
+    float look;                             // smoothed 0..1 orange screen glow
+    float fireLook;                         // smoothed 0..1 flames on screen + hand lights (only when on fire)
     float wardFlash;                        // 1 on a kill, fades
 
     void Start()
@@ -80,10 +82,11 @@ public class SunBurn : MonoBehaviour
         // Scene/domain reload is off in this project — start clean
         exposure = 0f;
         look = 0f;
+        fireLook = 0f;
         OnFire = false;
         IsLit = false;
         SetHandFires(false, true);
-        ApplyLook(0f);
+        ApplyLook(0f, 0f);
         UpdateSunIcon();
         SetWard(0f);
 
@@ -125,7 +128,7 @@ public class SunBurn : MonoBehaviour
 
     void UpdateWardBar()
     {
-        if (wardFill != null) wardFill.localScale = new Vector3(wardMax > 0f ? Ward / wardMax : 0f, 1f, 1f);
+        if (wardBar != null) wardBar.SetValue(wardMax > 0f ? Ward / wardMax : 0f);
         if (wardFillGraphic != null) wardFillGraphic.color = Color.Lerp(wardColor, wardGainColor, wardFlash);
     }
 
@@ -134,7 +137,7 @@ public class SunBurn : MonoBehaviour
         Shooter.Executed -= OnExecution;
         OnFire = false;
         SetHandFires(false, true);
-        ApplyLook(0f);
+        ApplyLook(0f, 0f);
         if (loopSource != null) { loopSource.Stop(); loopSource.volume = 0f; }
     }
 
@@ -180,10 +183,12 @@ public class SunBurn : MonoBehaviour
         }
         UpdateLoop();
 
-        // screen grade only while actually burning — the sun icon is the warning
-        look = Mathf.MoveTowards(look, OnFire ? 1f : 0f, fadeSpeed * Time.unscaledDeltaTime);
+        // the orange glow while burning, softer in the sun on the ward; flames only while actually burning
+        float glow = OnFire ? 1f : IsLit && Ward > 0f ? wardedGlow : 0f;
+        look = Mathf.MoveTowards(look, glow, fadeSpeed * Time.unscaledDeltaTime);
+        fireLook = Mathf.MoveTowards(fireLook, OnFire ? 1f : 0f, fadeSpeed * Time.unscaledDeltaTime);
         float f = (Mathf.PerlinNoise(Time.unscaledTime * flickerSpeed, 0.37f) - 0.5f) * 2f * flicker;
-        ApplyLook(Mathf.Clamp01(look + f * look));
+        ApplyLook(Mathf.Clamp01(look + f * look), Mathf.Clamp01(fireLook + f * fireLook));
         UpdateSunIcon();
     }
 
@@ -256,21 +261,22 @@ public class SunBurn : MonoBehaviour
         }
     }
 
-    void ApplyLook(float amount)
+    /// <summary><paramref name="glow"/>: the orange grade; <paramref name="fire"/>: flames on screen and the hand lights.</summary>
+    void ApplyLook(float glow, float fire)
     {
-        if (volume != null) volume.weight = amount;
+        if (volume != null) volume.weight = glow;
         if (overlay != null)
         {
             Color c = overlay.color;
-            c.a = overlayAlpha * amount;
+            c.a = overlayAlpha * fire;
             overlay.color = c;
         }
         if (handLights != null)
             foreach (var l in handLights)
             {
                 if (l == null) continue;
-                l.intensity = handLightIntensity * amount;
-                l.enabled = amount > 0.01f;
+                l.intensity = handLightIntensity * fire;
+                l.enabled = fire > 0.01f;
             }
     }
 
