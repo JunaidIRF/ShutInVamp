@@ -313,16 +313,18 @@ public static class ExecutionAnimEditing
     }
 
     // ══════════════════════════════════════════════════════════════════
-    //  SEVER PREVIEW — from an event's marker on, the stage's enemy shows that part cut off: its mesh
-    //  without the part's triangles (the game's own rule, Dismemberment.WithoutParts) and a stump at the cut
+    //  SEVER PREVIEW — from an event's marker on, the stage's enemy shows that part cut off: the very mesh the
+    //  game makes (Dismemberment.CutMesh: the part gone, the opening closed with the wound), and a label at the cut
     // ══════════════════════════════════════════════════════════════════
 
     const string CutMeshTag = " (cut preview)";
-    const string CutStumpName = "Cut preview";
+    const string CutMarkerName = "Cut preview";
+    const string WoundName = "Wound";
     static string cutKey = "";
     static double nextCutCheck;
-    static readonly System.Collections.Generic.List<(SkinnedMeshRenderer smr, Mesh original)> cutMeshes = new System.Collections.Generic.List<(SkinnedMeshRenderer, Mesh)>();
-    static readonly System.Collections.Generic.List<(GameObject stump, string label)> cutStumps = new System.Collections.Generic.List<(GameObject, string)>();
+    static readonly System.Collections.Generic.List<(SkinnedMeshRenderer smr, Mesh mesh, Material[] materials)> cutOriginals = new System.Collections.Generic.List<(SkinnedMeshRenderer, Mesh, Material[])>();
+    static readonly System.Collections.Generic.List<(GameObject marker, string label)> cutMarkers = new System.Collections.Generic.List<(GameObject, string)>();
+    static Material previewWound;
     static GUIStyle cutLabelStyle;
 
     static void PreviewCuts()
@@ -369,15 +371,18 @@ public static class ExecutionAnimEditing
     {
         var d = enemy.GetComponent<Dismemberment>();
         if (d == null) { Debug.LogWarning("Execution sever preview: the stage's enemy has no Dismemberment"); return; }
-        // the stage's enemy is a copy from when Animate was pressed: use the enemy prefab's parts, so the preview
-        // matches the game even when they changed since
+        // the stage's enemy is a copy from when Animate was pressed: use the enemy prefab's settings, so the
+        // preview matches the game even when they changed since
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(EnemyPrefabPath);
         var source = prefab != null ? prefab.GetComponentInChildren<Dismemberment>(true) : null;
         if (source != null)
         {
-            d.parts = source.parts.Select(p => new Dismemberment.Part { part = p.part, bone = p.bone, stumpSize = p.stumpSize, mass = p.mass, claw = p.claw }).ToList();
-            d.stumpColor = source.stumpColor;
+            d.parts = source.parts.Select(p => new Dismemberment.Part { part = p.part, bone = p.bone, mass = p.mass, claw = p.claw }).ToList();
+            d.woundColor = source.woundColor;
+            d.woundDepth = source.woundDepth;
         }
+
+        // in time order, like the game; a part inside one already cut off is gone with it (the game skips it too)
         var found = new System.Collections.Generic.List<(Transform bone, string name, float time)>();
         foreach (var (part, time) in cuts)
         {
@@ -385,52 +390,80 @@ public static class ExecutionAnimEditing
             Transform bone = d.BoneOf(part);
             if (bone == null) { Debug.LogWarning($"Execution sever preview: '{name}' has no bone on the enemy (Shooter prefab > Model > Dismemberment > Parts)"); continue; }
             if (!d.CanCut(bone)) { Debug.LogWarning($"Execution sever preview: '{name}' is mapped to '{bone.name}', which can't be cut (the root bone)"); continue; }
+            if (found.Any(f => bone == f.bone || bone.IsChildOf(f.bone))) continue;
             found.Add((bone, name, time));
         }
         if (found.Count == 0) return;
-        var bones = found.Select(f => f.bone).ToList();
 
-        // stumps first, measured on the whole mesh, at the outermost cuts (a cut inside a part that is cut off goes with it)
-        var bodyRenderer = enemy.GetComponentInChildren<SkinnedMeshRenderer>(true);
-        Material bodyMat = bodyRenderer != null ? bodyRenderer.sharedMaterial : null;
-        Color color = d != null ? d.stumpColor : new Color(0.35f, 0.02f, 0.03f);
-        foreach (var (bone, name, time) in found)
-        {
-            if (bones.Any(o => o != bone && bone.IsChildOf(o))) continue;
-            d.CutShape(bone, out Vector3 point, out Vector3 along, out float size);
-            GameObject stump = Dismemberment.MakeStump(bone.parent, point, along, size, bodyMat, color);
-            stump.name = CutStumpName;
-            stump.hideFlags = HideFlags.HideAndDontSave;
-            stump.GetComponent<MeshRenderer>().sharedMaterial.hideFlags = HideFlags.HideAndDontSave;
-            cutStumps.Add((stump, $"Cut: {name}  ({time:F2} s)"));
-        }
+        var renderers = enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true).Where(r => r.sharedMesh != null && r.enabled && !r.name.Contains("HitFlash")).ToArray();
+        if (renderers.Length == 0) return;
+        previewWound = Dismemberment.MakeWoundMaterial(renderers[0].sharedMaterial, d.woundColor);
+        previewWound.name = WoundName;
+        previewWound.hideFlags = HideFlags.HideAndDontSave;
 
-        foreach (var smr in enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        var centres = new System.Collections.Generic.List<(int cut, SkinnedMeshRenderer smr, int vertex)>();
+        foreach (var smr in renderers)
         {
             Mesh original = smr.sharedMesh;
-            if (original == null) continue;
             if (!original.isReadable) { Debug.LogWarning($"Execution sever preview: '{original.name}' isn't Read/Write enabled"); continue; }
-            Mesh cut = Dismemberment.WithoutParts(smr, original, bones);
-            cut.name = original.name + CutMeshTag;
-            cut.hideFlags = HideFlags.HideAndDontSave;
-            cutMeshes.Add((smr, original));
-            smr.sharedMesh = cut;
+            Material[] originalMats = smr.sharedMaterials;
+            Mesh mesh = original;
+            Material[] mats = originalMats;
+            for (int i = 0; i < found.Count; i++)
+            {
+                var r = Dismemberment.CutMesh(smr, mesh, mats, previewWound, found[i].bone, null, null, d.woundDepth);
+                if (r == null) continue;
+                if (mesh != original) Object.DestroyImmediate(mesh);
+                mesh = r.body;
+                mats = r.bodyMaterials;
+                if (r.capCentre >= 0) centres.Add((i, smr, r.capCentre));
+            }
+            if (mesh == original) continue;
+            mesh.name = original.name + CutMeshTag;
+            mesh.hideFlags = HideFlags.HideAndDontSave;
+            cutOriginals.Add((smr, original, originalMats));
+            smr.sharedMesh = mesh;
+            smr.sharedMaterials = mats;
+        }
+
+        // labels at each wound's middle (on the posed mesh), riding on the bone the wound is on
+        var posed = new System.Collections.Generic.Dictionary<SkinnedMeshRenderer, Vector3[]>();
+        foreach (var (i, smr, vertex) in centres)
+        {
+            var (bone, name, time) = found[i];
+            if (found.Any(f => f.bone != bone && bone.IsChildOf(f.bone))) continue;   // its wound went with a bigger cut
+            if (!posed.TryGetValue(smr, out Vector3[] v))
+            {
+                var baked = new Mesh();
+                smr.BakeMesh(baked, false);
+                v = baked.vertices;
+                Object.DestroyImmediate(baked);
+                posed[smr] = v;
+            }
+            if (vertex >= v.Length) continue;
+            var marker = new GameObject(CutMarkerName) { hideFlags = HideFlags.HideAndDontSave };
+            marker.transform.SetParent(bone.parent, false);
+            marker.transform.position = smr.transform.position + smr.transform.rotation * v[vertex];
+            cutMarkers.Add((marker, $"Cut: {name}  ({time:F2} s)"));
         }
     }
 
-    /// <summary>The stage's enemy back to its real mesh, preview stumps gone. Safe to call any time.</summary>
+    /// <summary>The stage's enemy back to its real mesh and materials, preview objects gone. Safe to call any time.</summary>
     static void RestoreCuts()
     {
-        foreach (var (smr, original) in cutMeshes)
+        foreach (var (smr, mesh, materials) in cutOriginals)
         {
             if (smr == null) continue;
             Mesh shown = smr.sharedMesh;
-            smr.sharedMesh = original;
-            if (shown != null && shown != original && shown.name.EndsWith(CutMeshTag)) Object.DestroyImmediate(shown);
+            smr.sharedMesh = mesh;
+            smr.sharedMaterials = materials;
+            if (shown != null && shown != mesh && shown.name.EndsWith(CutMeshTag)) Object.DestroyImmediate(shown);
         }
-        cutMeshes.Clear();
-        foreach (var (stump, _) in cutStumps) DestroyStump(stump);
-        cutStumps.Clear();
+        cutOriginals.Clear();
+        foreach (var (marker, _) in cutMarkers) if (marker != null) Object.DestroyImmediate(marker);
+        cutMarkers.Clear();
+        if (previewWound != null) Object.DestroyImmediate(previewWound);
+        previewWound = null;
         cutKey = "";
 
         // after a script reload the lists above are empty: find leftovers in the stage itself
@@ -439,10 +472,12 @@ public static class ExecutionAnimEditing
         GameObject rig = stage.GetRootGameObjects().FirstOrDefault(g => g.name == "Execution Rig");
         Transform enemy = rig != null ? rig.transform.Find(EnemyPrefix) : null;
         if (enemy == null) return;
+        bool leftovers = false;
         SkinnedMeshRenderer[] real = null;
         foreach (var smr in enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
         {
             if (smr.sharedMesh == null || !smr.sharedMesh.name.EndsWith(CutMeshTag)) continue;
+            leftovers = true;
             if (real == null)
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(EnemyPrefabPath);
@@ -452,28 +487,27 @@ public static class ExecutionAnimEditing
             if (same == null) continue;
             Mesh shown = smr.sharedMesh;
             smr.sharedMesh = same.sharedMesh;
+            smr.sharedMaterials = same.sharedMaterials;
             Object.DestroyImmediate(shown);
         }
-        foreach (var t in enemy.GetComponentsInChildren<Transform>(true).Where(t => t.name == CutStumpName).ToArray())
-            DestroyStump(t.gameObject);
+        foreach (var t in enemy.GetComponentsInChildren<Transform>(true).Where(t => t.name == CutMarkerName).ToArray())
+        {
+            leftovers = true;
+            Object.DestroyImmediate(t.gameObject);
+        }
+        if (leftovers)
+            foreach (var m in Resources.FindObjectsOfTypeAll<Material>().Where(m => m.name == WoundName && m.hideFlags == HideFlags.HideAndDontSave).ToArray())
+                Object.DestroyImmediate(m);
     }
 
-    static void DestroyStump(GameObject stump)
-    {
-        if (stump == null) return;
-        var r = stump.GetComponent<MeshRenderer>();
-        if (r != null && r.sharedMaterial != null && r.sharedMaterial.hideFlags == HideFlags.HideAndDontSave) Object.DestroyImmediate(r.sharedMaterial);
-        Object.DestroyImmediate(stump);
-    }
-
-    /// <summary>A label at each cut in the Scene view, naming the bone and the marker's time.</summary>
+    /// <summary>A label at each cut in the Scene view, naming the part and the marker's time.</summary>
     static void DrawCutLabels(SceneView view)
     {
-        if (cutStumps.Count == 0) return;
+        if (cutMarkers.Count == 0) return;
         if (cutLabelStyle == null)
             cutLabelStyle = new GUIStyle(EditorStyles.helpBox) { fontStyle = FontStyle.Bold, fontSize = 11, alignment = TextAnchor.MiddleCenter };
-        foreach (var (stump, label) in cutStumps)
-            if (stump != null) Handles.Label(stump.transform.position, label, cutLabelStyle);
+        foreach (var (marker, label) in cutMarkers)
+            if (marker != null) Handles.Label(marker.transform.position, label, cutLabelStyle);
     }
 
     // ══════════════════════════════════════════════════════════════════

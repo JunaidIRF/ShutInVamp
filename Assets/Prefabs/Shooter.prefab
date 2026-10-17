@@ -1321,67 +1321,54 @@ MonoBehaviour:
   parts:
   - part: 1
     bone: mixamorig:Head
-    stumpSize: 0
     mass: 4
     claw: 1
   - part: 2
     bone: mixamorig:LeftArm
-    stumpSize: 0
     mass: 3
     claw: 1
   - part: 3
     bone: mixamorig:LeftForeArm
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 4
     bone: mixamorig:LeftHand
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 5
     bone: mixamorig:RightArm
-    stumpSize: 0
     mass: 3
     claw: 1
   - part: 6
     bone: mixamorig:RightForeArm
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 7
     bone: mixamorig:RightHand
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 8
     bone: mixamorig:LeftUpLeg
-    stumpSize: 0
     mass: 6
     claw: 1
   - part: 9
     bone: mixamorig:LeftLeg
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 10
     bone: mixamorig:LeftFoot
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 11
     bone: mixamorig:RightUpLeg
-    stumpSize: 0
     mass: 6
     claw: 1
   - part: 12
     bone: mixamorig:RightLeg
-    stumpSize: 0
     mass: 0
     claw: 0
   - part: 13
     bone: mixamorig:RightFoot
-    stumpSize: 0
     mass: 0
     claw: 0
   maxHitDistance: 0.35
@@ -1389,7 +1376,8 @@ MonoBehaviour:
   pieceLift: 3
   pieceSpin: 8
   pieceLifetime: 20
-  stumpColor: {r: 0.35, g: 0.02, b: 0.03, a: 1}
+  woundColor: {r: 0.3, g: 0.02, b: 0.025, a: 1}
+  woundDepth: 0.3
   bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
   jetFx: {fileID: 3654356420683697179, guid: 512ed9afcf5c09f408fde5149cd32327, type: 3}
   spurts: 5
