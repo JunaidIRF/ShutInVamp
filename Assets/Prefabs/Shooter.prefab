@@ -1319,26 +1319,71 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Decapitation
   parts:
-  - name: Head
+  - part: 1
     bone: mixamorig:Head
-    stumpSize: 0.1
+    stumpSize: 0
     mass: 4
-  - name: Left Arm
+    claw: 1
+  - part: 2
     bone: mixamorig:LeftArm
-    stumpSize: 0.09
+    stumpSize: 0
     mass: 3
-  - name: Right Arm
+    claw: 1
+  - part: 3
+    bone: mixamorig:LeftForeArm
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 4
+    bone: mixamorig:LeftHand
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 5
     bone: mixamorig:RightArm
-    stumpSize: 0.09
+    stumpSize: 0
     mass: 3
-  - name: Left Leg
+    claw: 1
+  - part: 6
+    bone: mixamorig:RightForeArm
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 7
+    bone: mixamorig:RightHand
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 8
     bone: mixamorig:LeftUpLeg
-    stumpSize: 0.15
+    stumpSize: 0
     mass: 6
-  - name: Right Leg
+    claw: 1
+  - part: 9
+    bone: mixamorig:LeftLeg
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 10
+    bone: mixamorig:LeftFoot
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 11
     bone: mixamorig:RightUpLeg
-    stumpSize: 0.15
+    stumpSize: 0
     mass: 6
+    claw: 1
+  - part: 12
+    bone: mixamorig:RightLeg
+    stumpSize: 0
+    mass: 0
+    claw: 0
+  - part: 13
+    bone: mixamorig:RightFoot
+    stumpSize: 0
+    mass: 0
+    claw: 0
   maxHitDistance: 0.35
   pieceSpeed: 4
   pieceLift: 3

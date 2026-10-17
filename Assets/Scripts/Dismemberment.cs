@@ -14,24 +14,71 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Dismemberment : MonoBehaviour
 {
-    /// <summary>A part a claw blow can cut off (and tuned stump size / weight for that bone).</summary>
+    /// <summary>What can be cut off (picked by execution events). Each one is mapped to this rig's bone in <see cref="parts"/>.</summary>
+    public enum BodyPart
+    {
+        None,
+        Head,
+        [InspectorName("Left Arm (at the shoulder)")] LeftArm,
+        [InspectorName("Left Forearm (at the elbow)")] LeftForearm,
+        [InspectorName("Left Hand (at the wrist)")] LeftHand,
+        [InspectorName("Right Arm (at the shoulder)")] RightArm,
+        [InspectorName("Right Forearm (at the elbow)")] RightForearm,
+        [InspectorName("Right Hand (at the wrist)")] RightHand,
+        [InspectorName("Left Leg (at the hip)")] LeftLeg,
+        [InspectorName("Left Lower Leg (at the knee)")] LeftLowerLeg,
+        [InspectorName("Left Foot (at the ankle)")] LeftFoot,
+        [InspectorName("Right Leg (at the hip)")] RightLeg,
+        [InspectorName("Right Lower Leg (at the knee)")] RightLowerLeg,
+        [InspectorName("Right Foot (at the ankle)")] RightFoot,
+    }
+
+    /// <summary>A body part on this rig: the bone it comes off at (with everything under it) and how it looks / weighs.</summary>
     [Serializable]
     public class Part
     {
-        public string name = "Head";
+        public BodyPart part = BodyPart.Head;
         [BonePicker] public string bone = "mixamorig:Head";   // the part is this bone and everything under it
-        public float stumpSize = 0.1f;                        // m across
+        [Tooltip("Stump width in m. 0 = the wound's own width, measured on the mesh")]
+        public float stumpSize = 0f;
+        [Tooltip("Weight of the cut-off piece in kg. 0 = from its size")]
         public float mass = 4f;
+        [Tooltip("A killing claw blow landing on this part cuts it off")]
+        public bool claw = true;
     }
 
-    public List<Part> parts = new List<Part>
+    public List<Part> parts = DefaultParts();
+
+    /// <summary>The Mixamo rig's bones for every body part; claw blows take the head and whole limbs.</summary>
+    public static List<Part> DefaultParts() => new List<Part>
     {
-        new Part { name = "Head", bone = "mixamorig:Head", stumpSize = 0.1f, mass = 4f },
-        new Part { name = "Left Arm", bone = "mixamorig:LeftArm", stumpSize = 0.09f, mass = 3f },
-        new Part { name = "Right Arm", bone = "mixamorig:RightArm", stumpSize = 0.09f, mass = 3f },
-        new Part { name = "Left Leg", bone = "mixamorig:LeftUpLeg", stumpSize = 0.15f, mass = 6f },
-        new Part { name = "Right Leg", bone = "mixamorig:RightUpLeg", stumpSize = 0.15f, mass = 6f },
+        new Part { part = BodyPart.Head, bone = "mixamorig:Head", stumpSize = 0f, mass = 4f },
+        new Part { part = BodyPart.LeftArm, bone = "mixamorig:LeftArm", stumpSize = 0f, mass = 3f },
+        new Part { part = BodyPart.LeftForearm, bone = "mixamorig:LeftForeArm", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.LeftHand, bone = "mixamorig:LeftHand", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.RightArm, bone = "mixamorig:RightArm", stumpSize = 0f, mass = 3f },
+        new Part { part = BodyPart.RightForearm, bone = "mixamorig:RightForeArm", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.RightHand, bone = "mixamorig:RightHand", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.LeftLeg, bone = "mixamorig:LeftUpLeg", stumpSize = 0f, mass = 6f },
+        new Part { part = BodyPart.LeftLowerLeg, bone = "mixamorig:LeftLeg", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.LeftFoot, bone = "mixamorig:LeftFoot", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.RightLeg, bone = "mixamorig:RightUpLeg", stumpSize = 0f, mass = 6f },
+        new Part { part = BodyPart.RightLowerLeg, bone = "mixamorig:RightLeg", stumpSize = 0f, mass = 0f, claw = false },
+        new Part { part = BodyPart.RightFoot, bone = "mixamorig:RightFoot", stumpSize = 0f, mass = 0f, claw = false },
     };
+
+    /// <summary>"LeftLowerLeg" -> "Left Lower Leg".</summary>
+    public static string Label(BodyPart part)
+    {
+        string s = part.ToString();
+        var sb = new System.Text.StringBuilder(s.Length + 4);
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(s[i])) sb.Append(' ');
+            sb.Append(s[i]);
+        }
+        return sb.ToString();
+    }
     [Tooltip("A blow whose line passes further than this from every bone of a part doesn't cut anything")]
     public float maxHitDistance = 0.35f;
 
@@ -78,7 +125,14 @@ public class Dismemberment : MonoBehaviour
         return false;
     }
 
-    public Part Find(string partName) => parts.Find(p => p.name == partName);
+    public Part Find(BodyPart part) => part == BodyPart.None ? null : parts.Find(p => p.part == part);
+
+    /// <summary>This rig's bone for <paramref name="part"/> (null if it isn't mapped).</summary>
+    public Transform BoneOf(BodyPart part)
+    {
+        Part p = Find(part);
+        return p != null ? FindDeep(transform, p.bone) : null;
+    }
 
     /// <summary>
     /// The part a blow along <paramref name="direction"/> through <paramref name="point"/> lands on: the one
@@ -89,7 +143,12 @@ public class Dismemberment : MonoBehaviour
         if (direction.sqrMagnitude < 0.0001f) return null;
         direction.Normalize();
         var bones = new Dictionary<Part, Transform>();
-        foreach (var p in parts) { var t = FindDeep(transform, p.bone); if (t != null && !IsCut(t)) bones[p] = t; }
+        foreach (var p in parts)
+        {
+            if (!p.claw) continue;
+            var t = FindDeep(transform, p.bone);
+            if (t != null && !IsCut(t)) bones[p] = t;
+        }
 
         Transform root = RootBone();
         Part best = null;
@@ -115,17 +174,10 @@ public class Dismemberment : MonoBehaviour
         return p != null && Sever(p, direction);
     }
 
-    /// <summary>Cuts off the part named <paramref name="partName"/> (e.g. "Head").</summary>
-    public bool Sever(string partName, Vector3 direction)
-    {
-        Part p = Find(partName);
-        return p != null && Sever(p, direction);
-    }
+    /// <summary>Cuts off <paramref name="part"/> (at the bone it's mapped to in <see cref="parts"/>).</summary>
+    public bool Sever(BodyPart part, Vector3 direction) => Sever(Find(part), direction);
 
     public bool Sever(Part part, Vector3 direction) => part != null && Sever(FindDeep(transform, part.bone), direction);
-
-    /// <summary>Cuts the body off at the bone named <paramref name="boneName"/> (it and everything under it).</summary>
-    public bool SeverBone(string boneName, Vector3 direction) => Sever(FindDeep(transform, boneName), direction);
 
     /// <summary>Cuts the body off at <paramref name="bone"/>: it and everything under it fly off.</summary>
     public bool Sever(Transform bone, Vector3 direction)
@@ -135,8 +187,8 @@ public class Dismemberment : MonoBehaviour
 
         CutPose(bone, out Vector3 cutPoint, out Vector3 along);
         Part tuned = parts.Find(p => p.bone == bone.name);
-        string partName = tuned != null ? tuned.name : BoneLabel(bone.name);
-        float stumpSize = tuned != null ? tuned.stumpSize : 0f;
+        string partName = tuned != null ? Label(tuned.part) : BoneLabel(bone.name);
+        float stumpSize = tuned != null ? tuned.stumpSize : 0f;   // 0 = measured below
 
         var renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
         var done = new Dictionary<Mesh, Mesh>();   // original -> body (HitFlash overlays share the mesh)
@@ -207,13 +259,16 @@ public class Dismemberment : MonoBehaviour
             smr.sharedMesh = body;
             any = true;
 
-            if (stumpSize <= 0f)
+            // the wound on the posed mesh: where the stumps sit and how wide (they and the jets face along the bone)
+            var world = new Vector3[bakedV.Length];
+            for (int v = 0; v < world.Length; v++) world[v] = smr.transform.position + smr.transform.rotation * bakedV[v];
+            if (MeasureCut(original, share, world, along, out Vector3 ringCentre, out float ringWidth))
             {
-                var world = new Vector3[bakedV.Length];
-                for (int v = 0; v < world.Length; v++) world[v] = smr.transform.position + smr.transform.rotation * bakedV[v];
-                stumpSize = MeasureStump(world, share, cutPoint, along);
+                cutPoint = ringCentre;
+                if (stumpSize <= 0f) stumpSize = ringWidth;
             }
-            float mass = tuned != null ? tuned.mass : Mathf.Clamp(pieceMesh.bounds.size.x * pieceMesh.bounds.size.y * pieceMesh.bounds.size.z * 500f, 0.5f, 25f);
+            if (stumpSize <= 0f) stumpSize = 0.08f;
+            float mass = tuned != null && tuned.mass > 0f ? tuned.mass : Mathf.Clamp(pieceMesh.bounds.size.x * pieceMesh.bounds.size.y * pieceMesh.bounds.size.z * 500f, 0.5f, 25f);
             piece = SpawnPiece(partName, mass, stumpSize, pieceMesh, smr, direction, cutPoint, along);
         }
         if (!any) return false;
@@ -360,14 +415,15 @@ public class Dismemberment : MonoBehaviour
         return bone != root && bone.IsChildOf(root);
     }
 
-    /// <summary>Where <paramref name="bone"/> comes off: by its joint, the cut facing along the part (out of the body).</summary>
+    /// <summary>
+    /// A rough cut from the bones alone (when the mesh can't be measured): just before the joint, facing
+    /// along the parent bone into the part.
+    /// </summary>
     public static void CutPose(Transform bone, out Vector3 point, out Vector3 along)
     {
         Transform parent = bone.parent;
         point = Vector3.Lerp(parent.position, bone.position, 0.85f);
-        Transform next = null;
-        foreach (Transform c in bone) if (c.GetComponent<Renderer>() == null) { next = c; break; }
-        along = next != null ? next.position - bone.position : bone.position - parent.position;
+        along = bone.position - parent.position;
         along = along.sqrMagnitude > 0.000001f ? along.normalized : Vector3.up;
     }
 
@@ -418,39 +474,73 @@ public class Dismemberment : MonoBehaviour
         return body;
     }
 
-    /// <summary>The stump size for a cut at <paramref name="bone"/>: the part's setting, else measured from the posed mesh.</summary>
-    public float StumpSize(Transform bone)
+    /// <summary>
+    /// The cut at <paramref name="bone"/> in the model's current pose: the wound's centre, the way it faces
+    /// (out of the body, into the part) and its width. What the stumps and the blood jets use.
+    /// </summary>
+    public void CutShape(Transform bone, out Vector3 point, out Vector3 normal, out float size)
     {
-        Part tuned = parts.Find(p => p.bone == bone.name);
-        if (tuned != null) return tuned.stumpSize;
+        CutPose(bone, out point, out normal);
+        size = 0.08f;
         var smr = GetComponentInChildren<SkinnedMeshRenderer>();
-        if (smr == null || smr.sharedMesh == null || !smr.sharedMesh.isReadable) return 0.08f;
-        float[] share = PartShare(smr, smr.sharedMesh, new[] { bone });
-        if (share == null) return 0.08f;
+        if (smr != null && smr.sharedMesh != null && smr.sharedMesh.isReadable)
+        {
+            float[] share = PartShare(smr, smr.sharedMesh, new[] { bone });
+            if (share != null && MeasureCut(smr.sharedMesh, share, PosedVertices(smr), normal, out Vector3 c, out float w))
+            {
+                point = c; size = w;
+            }
+        }
+        Part tuned = parts.Find(p => p.bone == bone.name);
+        if (tuned != null && tuned.stumpSize > 0f) size = tuned.stumpSize;
+    }
+
+    /// <summary>The skinned mesh's vertices in world space, in its current pose.</summary>
+    static Vector3[] PosedVertices(SkinnedMeshRenderer smr)
+    {
         var baked = new Mesh();
-        smr.BakeMesh(baked, false);
+        smr.BakeMesh(baked, false);   // world-sized, in the renderer's position / rotation
         Vector3[] v = baked.vertices;
         DestroyImmediate(baked);
         for (int i = 0; i < v.Length; i++) v[i] = smr.transform.position + smr.transform.rotation * v[i];
-        CutPose(bone, out Vector3 point, out Vector3 along);
-        return MeasureStump(v, share, point, along);
+        return v;
     }
 
-    /// <summary>Width of the part just past the cut (posed world vertices), so the stump covers the wound.</summary>
-    static float MeasureStump(Vector3[] world, float[] share, Vector3 cutPoint, Vector3 along)
+    /// <summary>
+    /// Measures the wound on the posed mesh: the ring of vertices the part's triangles share with the body's
+    /// (the edge of the hole). Centre = the ring's middle, width = its diameter across
+    /// <paramref name="facing"/>. The facing itself comes from the bones (<see cref="CutPose"/>): the mesh's
+    /// rings are too uneven (UV seams, slanted wrists / ankles) to give a reliable one. False if there's no ring.
+    /// </summary>
+    public static bool MeasureCut(Mesh mesh, float[] share, Vector3[] world, Vector3 facing, out Vector3 centre, out float width)
     {
-        var radii = new List<float>();
-        for (int i = 0; i < world.Length && i < share.Length; i++)
+        centre = Vector3.zero; width = 0f;
+        int n = Mathf.Min(world.Length, share.Length);
+        var inPart = new bool[n];
+        var inBody = new bool[n];
+        for (int sm = 0; sm < mesh.subMeshCount; sm++)
         {
-            if (share[i] <= 0.5f) continue;
-            Vector3 o = world[i] - cutPoint;
-            float h = Vector3.Dot(o, along);
-            if (h < -0.02f || h > 0.05f) continue;
-            radii.Add((o - along * h).magnitude);
+            var tris = mesh.GetTriangles(sm);
+            for (int i = 0; i + 2 < tris.Length; i += 3)
+            {
+                int a = tris[i], b = tris[i + 1], c = tris[i + 2];
+                if (a >= n || b >= n || c >= n) continue;
+                var side = IsPartTriangle(share, a, b, c) ? inPart : inBody;
+                side[a] = side[b] = side[c] = true;
+            }
         }
-        if (radii.Count == 0) return 0.08f;
+        var ring = new List<Vector3>();
+        for (int v = 0; v < n; v++)
+            if (inPart[v] && inBody[v]) ring.Add(world[v]);
+        if (ring.Count < 3) return false;
+
+        foreach (var p in ring) centre += p;
+        centre /= ring.Count;
+        var radii = new List<float>(ring.Count);
+        foreach (var p in ring) { Vector3 d = p - centre; radii.Add((d - facing * Vector3.Dot(d, facing)).magnitude); }
         radii.Sort();
-        return Mathf.Clamp(radii[(int)(radii.Count * 0.75f)] * 2f, 0.03f, 0.4f);
+        width = Mathf.Clamp(radii[Mathf.Min(radii.Count - 1, (int)(radii.Count * 0.9f))] * 2f, 0.02f, 0.5f);
+        return true;
     }
 
     /// <summary>A flattened dark-red cap at <paramref name="worldPos"/>, its flat side facing <paramref name="normal"/>.</summary>

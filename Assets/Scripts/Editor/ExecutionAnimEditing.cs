@@ -331,7 +331,7 @@ public static class ExecutionAnimEditing
         nextCutCheck = EditorApplication.timeSinceStartup + 0.05;
 
         Transform enemy = null;
-        var cuts = new System.Collections.Generic.List<(string bone, float time)>();
+        var cuts = new System.Collections.Generic.List<(Dismemberment.BodyPart part, float time)>();
         if (!EditorApplication.isPlayingOrWillChangePlaymode && SceneManager.GetActiveScene().path == StagePath)
         {
             GameObject rig = SceneManager.GetActiveScene().GetRootGameObjects().FirstOrDefault(g => g.name == "Execution Rig");
@@ -343,7 +343,7 @@ public static class ExecutionAnimEditing
                 cuts = CutsAt(data, aw.time);
         }
 
-        string key = string.Join("|", cuts.Select(c => c.bone + "@" + c.time.ToString("F4")));
+        string key = string.Join("|", cuts.Select(c => c.part + "@" + c.time.ToString("F4")));
         if (key == cutKey) return;
         RestoreCuts();
         if (cuts.Count > 0) ApplyCuts(enemy, cuts);
@@ -352,28 +352,30 @@ public static class ExecutionAnimEditing
         UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
     }
 
-    /// <summary>Same rule as the game: every event at or before <paramref name="t"/> with a Sever bone has cut it.</summary>
-    static System.Collections.Generic.List<(string bone, float time)> CutsAt(ExecutionData data, float t)
+    /// <summary>Same rule as the game: every event at or before <paramref name="t"/> with a Sever part has cut it.</summary>
+    static System.Collections.Generic.List<(Dismemberment.BodyPart part, float time)> CutsAt(ExecutionData data, float t)
     {
-        var cuts = new System.Collections.Generic.List<(string, float)>();
+        var cuts = new System.Collections.Generic.List<(Dismemberment.BodyPart, float)>();
         if (data.events == null) return cuts;
         foreach (var e in data.events.OrderBy(e => e.time))
         {
             if (e.time > t + 0.0001f) break;
-            if (!string.IsNullOrEmpty(e.sever) && !cuts.Any(c => c.Item1 == e.sever)) cuts.Add((e.sever, e.time));
+            if (e.sever != Dismemberment.BodyPart.None && !cuts.Any(c => c.Item1 == e.sever)) cuts.Add((e.sever, e.time));
         }
         return cuts;
     }
 
-    static void ApplyCuts(Transform enemy, System.Collections.Generic.List<(string bone, float time)> cuts)
+    static void ApplyCuts(Transform enemy, System.Collections.Generic.List<(Dismemberment.BodyPart part, float time)> cuts)
     {
         var d = enemy.GetComponent<Dismemberment>();
+        if (d == null) { Debug.LogWarning("Execution sever preview: the stage's enemy has no Dismemberment"); return; }
         var found = new System.Collections.Generic.List<(Transform bone, string name, float time)>();
-        foreach (var (name, time) in cuts)
+        foreach (var (part, time) in cuts)
         {
-            Transform bone = Dismemberment.FindDeep(enemy, name);
-            if (bone == null) { Debug.LogWarning($"Execution sever preview: no bone '{name}' on the enemy"); continue; }
-            if (d != null && !d.CanCut(bone)) { Debug.LogWarning($"Execution sever preview: '{name}' can't be cut (the root bone, or not one of the model's bones)"); continue; }
+            string name = Dismemberment.Label(part);
+            Transform bone = d.BoneOf(part);
+            if (bone == null) { Debug.LogWarning($"Execution sever preview: '{name}' has no bone on the enemy (Dismemberment > Parts)"); continue; }
+            if (!d.CanCut(bone)) { Debug.LogWarning($"Execution sever preview: '{name}' is mapped to '{bone.name}', which can't be cut (the root bone)"); continue; }
             found.Add((bone, name, time));
         }
         if (found.Count == 0) return;
@@ -386,13 +388,12 @@ public static class ExecutionAnimEditing
         foreach (var (bone, name, time) in found)
         {
             if (bones.Any(o => o != bone && bone.IsChildOf(o))) continue;
-            Dismemberment.CutPose(bone, out Vector3 point, out Vector3 along);
-            float size = d != null ? d.StumpSize(bone) : 0.08f;
+            d.CutShape(bone, out Vector3 point, out Vector3 along, out float size);
             GameObject stump = Dismemberment.MakeStump(bone.parent, point, along, size, bodyMat, color);
             stump.name = CutStumpName;
             stump.hideFlags = HideFlags.HideAndDontSave;
             stump.GetComponent<MeshRenderer>().sharedMaterial.hideFlags = HideFlags.HideAndDontSave;
-            cutStumps.Add((stump, $"Cut: {Dismemberment.BoneLabel(name)}  ({time:F2} s)"));
+            cutStumps.Add((stump, $"Cut: {name}  ({time:F2} s)"));
         }
 
         foreach (var smr in enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
@@ -688,7 +689,7 @@ public class ExecutionDataEditor : Editor
             ExecutionAnimEditing.Open(data);
         if (editing)
         {
-            EditorGUILayout.HelpBox("Editing in ExecutionStage: select 'Execution Rig' in the Animation window. Changes copy to the game clips automatically. Markers: 'Kill' = kill time, every other marker = one event; set its Blood / Heal / Shake / Hands / Sever below (Hands: World = the enemy can cover them, Overlay = back on top; always back to Overlay at the end). Sever: pick a bone (drag it in from the stage's Enemy) and that bone with everything under it is cut off at that marker; scrub past the marker and the stage shows the part gone, a stump and a label at the cut.", MessageType.Info);
+            EditorGUILayout.HelpBox("Editing in ExecutionStage: select 'Execution Rig' in the Animation window. Changes copy to the game clips automatically. Markers: 'Kill' = kill time, every other marker = one event; set its Blood / Heal / Shake / Hands / Sever below (Hands: World = the enemy can cover them, Overlay = back on top; always back to Overlay at the end). Sever: pick a body part and it's cut off at that marker; scrub past the marker and the stage shows the part gone, a stump and a label at the cut.", MessageType.Info);
             if (GUILayout.Button("Apply to game clips now")) ExecutionAnimEditing.ApplyNow();
         }
 

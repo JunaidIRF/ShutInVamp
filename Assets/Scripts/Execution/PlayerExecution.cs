@@ -177,10 +177,11 @@ public class PlayerExecution : MonoBehaviour
     void Fire(ExecutionData.Event e, Shooter victim, Transform bone)
     {
         if (e.blood) victim.Bleed(bone.position, BiteDirection(bone));
-        if (!string.IsNullOrEmpty(e.sever))
+        if (e.sever != Dismemberment.BodyPart.None)
         {
-            Transform cut = FindDeep(victim.anim.transform, e.sever);
+            Transform cut = victim.PartBone(e.sever);
             if (cut != null) victim.Sever(e.sever, BiteDirection(cut));   // flies off away from us
+            else Debug.LogWarning($"Execution: the victim has no bone for '{e.sever}' (Dismemberment > Parts)");
         }
         if (e.shake > 0f && juice != null) juice.Shake(e.shake, e.shakeTime);
         if (e.heal > 0f && player != null) player.Heal(e.heal);

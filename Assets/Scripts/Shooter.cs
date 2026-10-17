@@ -774,14 +774,21 @@ public class Shooter : MonoBehaviour
         health = 0f;
         UpdateHealthBar();
         Die(point, direction, bodySpeed, hitSpeed, lift);
-        if (decapitate) { var cut = FindDismemberment(); if (cut != null) cut.Sever("Head", direction); }
+        if (decapitate) { var cut = FindDismemberment(); if (cut != null) cut.Sever(Dismemberment.BodyPart.Head, direction); }
     }
 
-    /// <summary>Cuts the body off at the bone named <paramref name="boneName"/> (alive or dead), if the model has a Dismemberment.</summary>
-    public bool Sever(string boneName, Vector3 direction)
+    /// <summary>Cuts <paramref name="part"/> off (alive or dead), if the model has a Dismemberment.</summary>
+    public bool Sever(Dismemberment.BodyPart part, Vector3 direction)
     {
         var cut = FindDismemberment();
-        return cut != null && cut.SeverBone(boneName, direction);
+        return cut != null && cut.Sever(part, direction);
+    }
+
+    /// <summary>The bone <paramref name="part"/> comes off at on this model (null if there's none).</summary>
+    public Transform PartBone(Dismemberment.BodyPart part)
+    {
+        var cut = FindDismemberment();
+        return cut != null ? cut.BoneOf(part) : null;
     }
 
     Dismemberment FindDismemberment()

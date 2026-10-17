@@ -36,8 +36,8 @@ public class ExecutionData : ScriptableObject
         public HandsLayer hands;    // switch the hands' render layer
         [BonePicker, Tooltip("Where this event's blood comes from. Empty = the focus bone")]
         public string bone;
-        [BonePicker, Tooltip("Cut the victim's body off at this bone: it and everything under it fly off, with a stump and blood jets. Empty = no cut. The Animate stage shows the part gone from this marker on.")]
-        public string sever;
+        [Tooltip("Cut this part off the victim: it flies off, with a stump and blood jets. The Animate stage shows it gone from this marker on. (Which bone each part is: the enemy model's Dismemberment > Parts)")]
+        public Dismemberment.BodyPart sever;
     }
 
     [Tooltip("State name used in both the player's and the victim's animator controllers")]
