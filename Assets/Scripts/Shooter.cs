@@ -8,9 +8,11 @@ public class Shooter : MonoBehaviour
     public static readonly List<Shooter> Kicking = new List<Shooter>();
     /// <summary>Every enabled shooter (they keep some room from each other).</summary>
     public static readonly List<Shooter> Active = new List<Shooter>();
+    /// <summary>A shooter just died (any way: claws, execution, stake...). The vampire feeds on it.</summary>
+    public static event System.Action<Shooter> Killed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics() { Kicking.Clear(); Active.Clear(); ThrowTurns.Clear(); StakeArrivals.Clear(); }
+    static void ResetStatics() { Kicking.Clear(); Active.Clear(); ThrowTurns.Clear(); StakeArrivals.Clear(); Killed = null; }
 
     // group fairness: only a few enemies throw at once, and no two stakes arrive at the same moment
     static readonly List<(Shooter who, float until)> ThrowTurns = new List<(Shooter, float)>();
@@ -843,6 +845,7 @@ public class Shooter : MonoBehaviour
     void Die(Vector3 point, Vector3 direction, float bodySpeed, float hitSpeed, float lift)
     {
         isDead = true;
+        Killed?.Invoke(this);
         isExecuted = false;
         isStaggered = false;
         releaseTime = -1f;

@@ -10,10 +10,15 @@ using UnityEngine.AI;
 /// a break before the next, harder one (more enemies, more at once, sooner, tougher). Dead bodies sink into
 /// the ground after a while. If the player dies the run is over: everyone stops, "YOU DIED", and after a
 /// pause it starts again from wave 1.
+///
+/// With zones set it's a run instead: a wave per patch of shade, in order. Clear one and a beacon shows the next;
+/// get there across the sun (on the ward your kills gave you) and its wave starts. The last zone is the finish:
+/// reaching it wins (or, with lastZoneIsGoal off, clearing its wave does).
+/// Dying puts you back in the zone you were last in, ward gone, and its wave comes again.
 /// </summary>
 public class WaveDirector : MonoBehaviour
 {
-    public enum Phase { Starting, Fighting, Break, Dead }
+    public enum Phase { Starting, Fighting, Break, Dead, Travel, Won }
 
     [Header("Enemies")]
     public Shooter enemyPrefab;
@@ -56,6 +61,22 @@ public class WaveDirector : MonoBehaviour
     [Header("Death")]
     public float deathPause = 4f;           // "YOU DIED" before the run starts again
 
+    [Header("Zones (a run from shade to shade; empty = endless waves)")]
+    public ShadeZone[] zones;
+    [Tooltip("A zone's enemies come from spawn points this far past its edge")]
+    public float spawnReach = 22f;
+    [Tooltip("Shown at the next zone while you make your way there")]
+    public Transform beacon;
+    [Tooltip("The last zone has no wave: getting there is the win")]
+    public bool lastZoneIsGoal = true;
+    public float winPause = 8f;             // "YOU ESCAPED" before a new run from the start
+
+    public bool ZoneMode => zones != null && zones.Length > 0;
+    /// <summary>The zone the player is in (or was last in), 0-based.</summary>
+    public int ZoneIndex { get; private set; }
+    /// <summary>Zones with a wave (all but the finish).</summary>
+    public int Fights => ZoneMode ? (lastZoneIsGoal ? Mathf.Max(1, zones.Length - 1) : zones.Length) : 0;
+
     public Phase State { get; private set; }
     public int Wave { get; private set; }
     /// <summary>Best wave reached since play started.</summary>
@@ -66,6 +87,8 @@ public class WaveDirector : MonoBehaviour
     public event System.Action<int> WaveStarted, WaveCleared, RunOver;
 
     Player player;
+    PlayerMovement movement;
+    SunBurn sunBurn;
     WaveHUD hud;
     readonly List<Shooter> alive = new List<Shooter>();
     readonly List<(Shooter body, float sinkAt)> corpses = new List<(Shooter, float)>();
@@ -73,6 +96,7 @@ public class WaveDirector : MonoBehaviour
     readonly List<Vector3> arriving = new List<Vector3>();   // spots with a puff going, an enemy on the way
     List<Vector3> ring;
     int toSpawn, pending, maxAlive, spawnedThisWave;
+    bool firstRun;
     float spawnInterval, nextSpawn, phaseEnd;
 
     void OnEnable() => Player.Died += OnPlayerDied;
@@ -82,11 +106,16 @@ public class WaveDirector : MonoBehaviour
     {
         // no scene reload in this project: start from nothing every run
         player = FindAnyObjectByType<Player>();
+        movement = player != null ? player.GetComponent<PlayerMovement>() : null;
+        sunBurn = player != null ? player.GetComponent<SunBurn>() : null;
         hud = FindAnyObjectByType<WaveHUD>(FindObjectsInactive.Include);
         StopAllCoroutines();
         alive.Clear(); corpses.Clear(); sinking.Clear(); arriving.Clear();
         ring = null;
         Best = 0;
+        ZoneIndex = 0;
+        firstRun = true;
+        ShowBeacon(null);
         if (removePlacedEnemies)
             foreach (var s in FindObjectsByType<Shooter>(FindObjectsInactive.Include)) Destroy(s.gameObject);
         BeginRun();
@@ -106,7 +135,20 @@ public class WaveDirector : MonoBehaviour
         toSpawn = pending = 0;
         State = Phase.Starting;
         phaseEnd = Time.time + firstWaveDelay;
-        if (hud != null) hud.Announce("GET READY", "", Mathf.Max(0.5f, firstWaveDelay - 0.8f));
+        if (movement != null && movement.Held) movement.Hold(false);
+        if (sunBurn != null) sunBurn.enabled = true;
+        string sub = "";
+        if (ZoneMode)
+        {
+            // back to the zone we're on (the first time you're already standing at the start), no ward: its wave is how you earn it
+            ShadeZone z = zones[ZoneIndex];
+            if (movement != null && z != null && !firstRun) movement.Teleport(z.transform.position, z.transform.forward);
+            if (sunBurn != null) sunBurn.SetWard(0f);
+            ShowBeacon(null);
+            sub = ZoneIndex == 0 ? "REACH THE FAR CORNER - STAY IN THE SHADE" : $"ZONE {ZoneIndex + 1} OF {Fights}";
+        }
+        firstRun = false;
+        if (hud != null) hud.Announce("GET READY", sub, Mathf.Max(0.5f, firstWaveDelay - 0.8f));
     }
 
     void StartWave(int wave)
@@ -121,7 +163,9 @@ public class WaveDirector : MonoBehaviour
         nextSpawn = Time.time + 0.6f;
         arriving.Clear();
         State = Phase.Fighting;
-        if (hud != null) hud.Announce($"WAVE {wave}", toSpawn == 1 ? "1 ENEMY" : $"{toSpawn} ENEMIES", 1.6f);
+        ShowBeacon(null);
+        string title = ZoneMode ? (ZoneIndex == Fights - 1 ? "LAST STAND" : $"ZONE {ZoneIndex + 1} / {Fights}") : $"WAVE {wave}";
+        if (hud != null) hud.Announce(title, toSpawn == 1 ? "1 ENEMY" : $"{toSpawn} ENEMIES", 1.6f);
         WaveStarted?.Invoke(wave);
     }
 
@@ -133,7 +177,23 @@ public class WaveDirector : MonoBehaviour
         switch (State)
         {
             case Phase.Starting:
-                if (now >= phaseEnd) StartWave(1);
+                if (now >= phaseEnd) StartWave(ZoneMode ? ZoneIndex + 1 : 1);
+                break;
+
+            case Phase.Travel:
+                {
+                    ShadeZone next = zones[ZoneIndex + 1];
+                    if (next == null || player == null || next.Contains(player.transform.position))
+                    {
+                        ZoneIndex++;
+                        if (ZoneIndex >= Fights) Win(now);
+                        else StartWave(ZoneIndex + 1);
+                    }
+                }
+                break;
+
+            case Phase.Won:
+                if (now >= phaseEnd) { ClearArena(); if (player != null) player.Heal(player.maxHealth); ZoneIndex = 0; BeginRun(); }
                 break;
 
             case Phase.Fighting:
@@ -157,9 +217,11 @@ public class WaveDirector : MonoBehaviour
 
         if (hud != null)
         {
-            string top = Wave > 0 ? $"WAVE {Wave}" : "";
+            string top = ZoneMode ? (State == Phase.Won ? "" : $"ZONE {Mathf.Min(ZoneIndex + 1, Fights)} / {Fights}") : Wave > 0 ? $"WAVE {Wave}" : "";
             string under = State == Phase.Fighting ? $"{Remaining} LEFT"
                          : State == Phase.Break ? $"NEXT WAVE IN {Mathf.Max(1, Mathf.CeilToInt(phaseEnd - now))}"
+                         : State == Phase.Travel && player != null && zones[ZoneIndex + 1] != null
+                             ? $"{(ZoneIndex + 1 >= Fights ? "THE CORNER" : "NEXT SHADE")} {Mathf.CeilToInt(zones[ZoneIndex + 1].FlatDistance(player.transform.position))} M"
                          : "";
             hud.SetStatus(top, under);
         }
@@ -170,15 +232,32 @@ public class WaveDirector : MonoBehaviour
         State = Phase.Break;
         phaseEnd = now + breakTime;
         if (player != null && clearHeal > 0f) player.Heal(clearHeal);
-        if (hud != null) hud.Announce("<color=#FFC93C>WAVE CLEARED</color>", clearHeal > 0f ? $"+{clearHeal:0} HEALTH" : "", 2f);
+        string heal = clearHeal > 0f ? $"+{clearHeal:0} HEALTH" : "";
+        if (ZoneMode && ZoneIndex >= zones.Length - 1) Win(now);
+        else if (ZoneMode)
+        {
+            State = Phase.Travel;
+            ShowBeacon(zones[ZoneIndex + 1]);
+            string go = ZoneIndex + 1 >= Fights ? "RUN FOR THE CORNER" : "RUN FOR THE NEXT SHADE";
+            if (hud != null) hud.Announce("<color=#FFC93C>ZONE CLEARED</color>", heal.Length > 0 ? heal + " - " + go : go, 2.2f);
+        }
+        else if (hud != null) hud.Announce("<color=#FFC93C>WAVE CLEARED</color>", heal, 2f);
         // the arena is cleaned up for the next wave
         for (int i = 0; i < corpses.Count; i++) corpses[i] = (corpses[i].body, Mathf.Min(corpses[i].sinkAt, now + 1.5f));
         WaveCleared?.Invoke(Wave);
     }
 
+    void Win(float now)
+    {
+        State = Phase.Won;
+        phaseEnd = now + winPause;
+        ShowBeacon(null);
+        if (hud != null) hud.Announce("<color=#FFC93C>YOU ESCAPED</color>", "THE CITY IS BEHIND YOU", Mathf.Max(0.5f, winPause - 0.8f));
+    }
+
     void OnPlayerDied()
     {
-        if (!isActiveAndEnabled || State == Phase.Dead) return;
+        if (!isActiveAndEnabled || State == Phase.Dead || State == Phase.Won) return;
         State = Phase.Dead;
         phaseEnd = Time.time + deathPause;
         StopAllCoroutines();   // nobody else arrives
@@ -191,7 +270,12 @@ public class WaveDirector : MonoBehaviour
             s.target = null;   // they stop fighting
             if (s.agent != null && s.agent.enabled && s.agent.isOnNavMesh) s.agent.isStopped = true;
         }
-        if (hud != null) hud.Announce("<color=#E0362C>YOU DIED</color>", Wave > 0 ? $"REACHED WAVE {Wave}" : "", Mathf.Max(0.5f, deathPause - 0.8f));
+        // no dying again and again where you fell (the sun) while the run waits to start over
+        if (sunBurn != null) sunBurn.enabled = false;
+        if (movement != null && !movement.Held) movement.Hold(true);
+        ShowBeacon(null);
+        string sub = ZoneMode ? $"BACK TO ZONE {ZoneIndex + 1}" : Wave > 0 ? $"REACHED WAVE {Wave}" : "";
+        if (hud != null) hud.Announce("<color=#E0362C>YOU DIED</color>", sub, Mathf.Max(0.5f, deathPause - 0.8f));
         RunOver?.Invoke(Wave);
     }
 
@@ -318,6 +402,11 @@ public class WaveDirector : MonoBehaviour
     IEnumerable<Vector3> Candidates()
     {
         bool any = false;
+        // a zone's enemies come from the roads round it (all of them if none are close enough)
+        ShadeZone zone = ZoneMode ? zones[ZoneIndex] : null;
+        if (spawnPoints != null && zone != null)
+            foreach (var t in spawnPoints) if (t != null && zone.FlatDistance(t.position) <= zone.radius + spawnReach) { any = true; yield return t.position; }
+        if (any) yield break;
         if (spawnPoints != null)
             foreach (var t in spawnPoints) if (t != null) { any = true; yield return t.position; }
         if (any) yield break;
@@ -340,6 +429,26 @@ public class WaveDirector : MonoBehaviour
             }
         }
         foreach (var p in ring) yield return p;
+    }
+
+    /// <summary>The beacon on the given zone (its ring sized to it), or hidden.</summary>
+    void ShowBeacon(ShadeZone at)
+    {
+        if (beacon == null) return;
+        beacon.gameObject.SetActive(at != null);
+        if (at == null) return;
+        beacon.position = at.transform.position;
+        Transform t = beacon.Find("Ring");
+        LineRenderer ring = t != null ? t.GetComponent<LineRenderer>() : null;
+        if (ring == null) return;
+        ring.useWorldSpace = false;
+        ring.loop = true;
+        ring.positionCount = 64;
+        for (int i = 0; i < 64; i++)
+        {
+            float a = i * Mathf.PI * 2f / 64f;
+            ring.SetPosition(i, new Vector3(Mathf.Cos(a) * at.radius, 0.12f, Mathf.Sin(a) * at.radius));
+        }
     }
 
     void OnDrawGizmos()

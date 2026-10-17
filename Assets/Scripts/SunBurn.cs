@@ -7,6 +7,8 @@ using UnityEngine.UI;
 /// the player warms up and, after a short moment, catches fire: steady burn damage while lit, lingering
 /// briefly after reaching shade. Safe exactly where the scene draws shadow.
 /// Drives a warm grade + flickering edge glow (a warning while warming up) and flames on the hands.
+/// Bare, the sun kills in a couple of seconds. Every kill feeds a sun ward (seconds of protection, capped):
+/// while it lasts the sun only singes, and it drains while you're in the light — enough to dash across a street.
 /// </summary>
 public class SunBurn : MonoBehaviour
 {
@@ -22,8 +24,17 @@ public class SunBurn : MonoBehaviour
     [Header("Burning")]
     public float igniteTime = 0.3f;         // seconds in light before catching fire
     public float lingerTime = 0.5f;         // keeps burning this long after reaching shade
-    public float burnTickDamage = 5f;
-    public float burnTickInterval = 0.5f;   // 5 every 0.5 s = 10 HP/s
+    public float burnTickDamage = 15f;      // bare skin...
+    public float burnTickInterval = 0.2f;   // ...15 every 0.2 s = 75 HP/s: a sunlit street is death without the ward
+
+    [Header("Sun ward (kills buy time in the sun)")]
+    public float wardPerKill = 2f;          // s of protection each kill gives...
+    public float wardMax = 8f;              // ...stacking up to this
+    public float wardedTickDamage = 0.8f;   // per tick while it holds (0.8 every 0.2 s = 4 HP/s): it still singes
+    public RectTransform wardFill;          // HUD3D/WardBar/Fill: x scale = how much ward is left
+    public Graphic wardFillGraphic;         // flashes bright when a kill tops it up
+    public Color wardColor = new Color(1f, 0.42f, 0.12f, 1f);
+    public Color wardGainColor = new Color(1f, 0.9f, 0.55f, 1f);
 
     [Header("Sound")]
     public Sfx burnLoop;                    // loops while on fire (its volume is the loop's full volume)
@@ -46,6 +57,8 @@ public class SunBurn : MonoBehaviour
 
     public bool IsLit { get; private set; }
     public bool OnFire { get; private set; }
+    /// <summary>Seconds of sun the ward still holds off.</summary>
+    public float Ward { get; private set; }
 
     Collider body;
     AudioSource loopSource;
@@ -53,6 +66,7 @@ public class SunBurn : MonoBehaviour
     float lastLitTime;
     float nextTickTime;
     float look;                             // smoothed 0..1 visual intensity
+    float wardFlash;                        // 1 on a kill, fades
 
     void Start()
     {
@@ -68,6 +82,7 @@ public class SunBurn : MonoBehaviour
         SetHandFires(false, true);
         ApplyLook(0f);
         UpdateSunIcon();
+        SetWard(0f);
 
         // the burning loop: its own source (made at runtime, reused if it's already there)
         if (loopSource == null)
@@ -88,8 +103,32 @@ public class SunBurn : MonoBehaviour
         loopSource.Stop();
     }
 
+    void OnEnable() => Shooter.Killed += OnKill;
+
+    void OnKill(Shooter _)
+    {
+        Ward = Mathf.Min(Ward + wardPerKill, wardMax);
+        wardFlash = 1f;
+        UpdateWardBar();
+    }
+
+    /// <summary>Set the ward outright (a respawn starts with none).</summary>
+    public void SetWard(float seconds)
+    {
+        Ward = Mathf.Clamp(seconds, 0f, wardMax);
+        wardFlash = 0f;
+        UpdateWardBar();
+    }
+
+    void UpdateWardBar()
+    {
+        if (wardFill != null) wardFill.localScale = new Vector3(wardMax > 0f ? Ward / wardMax : 0f, 1f, 1f);
+        if (wardFillGraphic != null) wardFillGraphic.color = Color.Lerp(wardColor, wardGainColor, wardFlash);
+    }
+
     void OnDisable()
     {
+        Shooter.Killed -= OnKill;
         OnFire = false;
         SetHandFires(false, true);
         ApplyLook(0f);
@@ -119,6 +158,9 @@ public class SunBurn : MonoBehaviour
 
         exposure = Mathf.Clamp01(exposure + (IsLit ? dt : -dt) / Mathf.Max(igniteTime, 0.0001f));
         if (IsLit) lastLitTime = Time.time;
+        if (IsLit) Ward = Mathf.Max(0f, Ward - dt);
+        wardFlash = Mathf.MoveTowards(wardFlash, 0f, Time.unscaledDeltaTime * 2.5f);
+        UpdateWardBar();
 
         if (!OnFire && exposure >= 1f) Ignite();
         else if (OnFire && !IsLit && Time.time - lastLitTime > lingerTime) Extinguish();
@@ -126,7 +168,7 @@ public class SunBurn : MonoBehaviour
         if (OnFire && Time.time >= nextTickTime)
         {
             nextTickTime = Time.time + burnTickInterval;
-            if (player != null) player.TakeDamage(burnTickDamage);   // HurtFeedback pulses on each tick
+            if (player != null) player.TakeDamage(Ward > 0f ? wardedTickDamage : burnTickDamage);   // HurtFeedback pulses on each tick
             burnTick?.Play();
         }
         UpdateLoop();
@@ -178,12 +220,12 @@ public class SunBurn : MonoBehaviour
         SetHandFires(false, false);
     }
 
-    /// <summary>Head or chest can see the sun (own collider and triggers ignored).</summary>
+    /// <summary>Head or chest can see the sun (own collider, triggers and Ignore Raycast — the invisible map bounds — ignored).</summary>
     bool CheckLit()
     {
         if (sun == null || !sun.isActiveAndEnabled || body == null) return false;
         Vector3 toSun = -sun.transform.forward;
-        int mask = ~(1 << gameObject.layer);
+        int mask = Physics.DefaultRaycastLayers & ~(1 << gameObject.layer);
         Bounds b = body.bounds;
         Vector3 head = b.center + Vector3.up * (b.extents.y * 0.8f);
         Vector3 chest = b.center + Vector3.up * (b.extents.y * 0.2f);
