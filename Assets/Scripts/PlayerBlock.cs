@@ -27,6 +27,8 @@ public class PlayerBlock : MonoBehaviour
     public float parryWindow = 0.2f;        // right-click must land this long before the hit
     [Range(0f, 1f)] public float chipDamage = 0.2f;
     public float parryHeal = 5f;            // every parried stake / kick gives this much health back
+    [Tooltip("Only attacks coming from within this many degrees of where you look (each side) can be blocked or parried; anything from behind just hits")]
+    [Range(0f, 180f)] public float guardFacing = 70f;
 
     [Header("Animation")]
     public Animator anim;                   // Camera Head animator: Block<Dir> / Parry<Dir> states
@@ -228,13 +230,14 @@ public class PlayerBlock : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// A melee hit (the enemy kick) lands now from ring <paramref name="angle"/> (180 = below): only a parry
-    /// pressed within <paramref name="window"/> s with the guard over that angle counts — blocking does
-    /// nothing. True = parried.
+    /// A melee hit (the enemy kick) lands now from ring <paramref name="angle"/> (180 = below), thrown from
+    /// <paramref name="attacker"/>: only a parry pressed within <paramref name="window"/> s with the guard over
+    /// that angle, facing the attacker, counts — blocking does nothing. True = parried.
     /// </summary>
-    public bool TryParryMelee(float window, float angle)
+    public bool TryParryMelee(float window, float angle, Vector3 attacker)
     {
-        bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(angle, guardAngle)) <= blockArc * 0.5f;
+        bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(angle, guardAngle)) <= blockArc * 0.5f
+                       && Facing(attacker - Center);
         if (!covered || Time.time - lastParryPress > window) return false;
         // like stakes: one parry covers every kick landing in its window
         if (!parryLanded)
@@ -250,7 +253,11 @@ public class PlayerBlock : MonoBehaviour
     {
         // Where on our capsule the bullet actually struck
         float hitAngle = BodyAngle(bullet.transform.position - Center);
-        bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(hitAngle, guardAngle)) <= blockArc * 0.5f;
+        // where it comes from: back along its flight (or its thrower)
+        Vector3 from = bullet.velocity.sqrMagnitude > 0.0001f ? -bullet.velocity
+                     : bullet.owner != null ? bullet.owner.transform.position - Center : transform.forward;
+        bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(hitAngle, guardAngle)) <= blockArc * 0.5f
+                       && Facing(from);
 
         // a parry stays active for its whole window: every stake the guard covers in it is reflected
         // (stakes from another side need their own parry — press again once one has landed)
@@ -285,6 +292,16 @@ public class PlayerBlock : MonoBehaviour
     }
 
     Vector3 Center => body != null ? body.bounds.center : transform.position;
+
+    /// <summary>Is <paramref name="toward"/> (flat) within <see cref="guardFacing"/> of where we're facing? The guard only covers the front.</summary>
+    bool Facing(Vector3 toward)
+    {
+        toward.y = 0f;
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        if (toward.sqrMagnitude < 0.0001f || forward.sqrMagnitude < 0.0001f) return true;   // right on top of us / looking straight down
+        return Vector3.Angle(forward, toward) <= guardFacing;
+    }
 
     /// <summary>Ring angle of an offset from our centre, seen face-on: up = head, right = our right.</summary>
     float BodyAngle(Vector3 offset)

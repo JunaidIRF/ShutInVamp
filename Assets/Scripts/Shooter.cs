@@ -614,7 +614,7 @@ public class Shooter : MonoBehaviour
         Transform victim = target;
 
         var block = victim.GetComponent<PlayerBlock>();
-        bool parried = block != null && block.TryParryMelee(kickParryWindow, 180f);   // a kick comes in low: guard down
+        bool parried = block != null && block.TryParryMelee(kickParryWindow, 180f, transform.position);   // a kick comes in low: guard down
 
         // parried: we're stunned and the player takes no damage, but is still pushed back a bit
         if (parried) Stun(staggerTime);

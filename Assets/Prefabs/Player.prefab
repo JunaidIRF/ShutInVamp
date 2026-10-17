@@ -9055,6 +9055,7 @@ MonoBehaviour:
   parryWindow: 0.2
   chipDamage: 0.2
   parryHeal: 5
+  guardFacing: 70
   anim: {fileID: 2954540343418349149}
   parryTag: Parry
   juice: {fileID: 5879824131008612246}
