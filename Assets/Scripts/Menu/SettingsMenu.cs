@@ -7,6 +7,8 @@ public class SettingsMenu : MonoBehaviour
 {
     public Slider volume;
     public TMP_Text volumeValue;
+    public Slider music;
+    public TMP_Text musicValue;
     public Slider sensitivity;
     public TMP_Text sensitivityValue;
     public OptionSelector antiAliasing;     // OFF / FXAA / SMAA
@@ -28,6 +30,7 @@ public class SettingsMenu : MonoBehaviour
     {
         hooked = true;
         if (volume != null) volume.onValueChanged.AddListener(v => { GameSettings.SetMasterVolume(v); ShowNumbers(); });
+        if (music != null) music.onValueChanged.AddListener(v => { GameSettings.SetMusicVolume(v); ShowNumbers(); });
         if (sensitivity != null) sensitivity.onValueChanged.AddListener(v => { GameSettings.SetSensitivity(v); ShowNumbers(); });
         if (antiAliasing != null) antiAliasing.Changed += i => GameSettings.SetAntiAliasing((GameSettings.PostAA)i);
         if (msaa != null) msaa.Changed += i => GameSettings.SetMsaa(GameSettings.MsaaSteps[i]);
@@ -39,6 +42,7 @@ public class SettingsMenu : MonoBehaviour
     void Refresh()
     {
         if (volume != null) volume.SetValueWithoutNotify(GameSettings.MasterVolume);
+        if (music != null) music.SetValueWithoutNotify(GameSettings.MusicVolume);
         if (sensitivity != null) sensitivity.SetValueWithoutNotify(GameSettings.Sensitivity);
         if (antiAliasing != null) antiAliasing.Show((int)GameSettings.AntiAliasing);
         if (msaa != null) msaa.Show(System.Array.IndexOf(GameSettings.MsaaSteps, GameSettings.Msaa));
@@ -50,6 +54,7 @@ public class SettingsMenu : MonoBehaviour
     void ShowNumbers()
     {
         if (volumeValue != null) volumeValue.text = $"{Mathf.RoundToInt(GameSettings.MasterVolume * 100f)}%";
+        if (musicValue != null) musicValue.text = $"{Mathf.RoundToInt(GameSettings.MusicVolume * 100f)}%";
         if (sensitivityValue != null) sensitivityValue.text = GameSettings.Sensitivity.ToString("0.0");
     }
 }

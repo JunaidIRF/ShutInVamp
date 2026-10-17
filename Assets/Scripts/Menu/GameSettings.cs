@@ -4,7 +4,8 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// The player's settings: kept in PlayerPrefs and applied to every scene as it loads (volume, mouse
+/// The player's settings: kept in PlayerPrefs and applied to every scene as it loads (volume, music volume (read by
+/// <see cref="MusicPlayer"/>), mouse
 /// sensitivity on the player, anti-aliasing on the cameras, MSAA on the render pipeline, vsync, fullscreen).
 /// Change a value through its setter and it's applied and saved at once.
 /// </summary>
@@ -13,9 +14,11 @@ public static class GameSettings
     public enum PostAA { Off, FXAA, SMAA }
 
     public const float DefaultSensitivity = 2f;
+    public const float DefaultMusicVolume = 0.25f;   // low: under the game's sounds
     public static readonly int[] MsaaSteps = { 1, 2, 4, 8 };
 
     public static float MasterVolume { get; private set; } = 1f;     // 0..1
+    public static float MusicVolume { get; private set; } = DefaultMusicVolume;   // 0..1, under the master
     public static float Sensitivity { get; private set; } = DefaultSensitivity;
     public static PostAA AntiAliasing { get; private set; } = PostAA.FXAA;
     public static int Msaa { get; private set; } = 1;                  // 1 = off, 2, 4, 8
@@ -47,6 +50,7 @@ public static class GameSettings
         if (loaded) return;
         loaded = true;
         MasterVolume = PlayerPrefs.GetFloat("settings.volume", 1f);
+        MusicVolume = PlayerPrefs.GetFloat("settings.music", DefaultMusicVolume);
         Sensitivity = PlayerPrefs.GetFloat("settings.sensitivity", DefaultSensitivity);
         AntiAliasing = (PostAA)Mathf.Clamp(PlayerPrefs.GetInt("settings.aa", (int)PostAA.FXAA), 0, 2);
         Msaa = PlayerPrefs.GetInt("settings.msaa", 1);
@@ -56,6 +60,7 @@ public static class GameSettings
     }
 
     public static void SetMasterVolume(float v) { MasterVolume = Mathf.Clamp01(v); Save(); Apply(); }
+    public static void SetMusicVolume(float v) { MusicVolume = Mathf.Clamp01(v); Save(); }   // MusicPlayer reads it every frame
     public static void SetSensitivity(float v) { Sensitivity = Mathf.Clamp(v, 0.1f, 10f); Save(); Apply(); }
     public static void SetAntiAliasing(PostAA v) { AntiAliasing = v; Save(); Apply(); }
     public static void SetMsaa(int v) { Msaa = System.Array.IndexOf(MsaaSteps, v) >= 0 ? v : 1; Save(); Apply(); }
@@ -64,13 +69,14 @@ public static class GameSettings
 
     public static void ResetToDefaults()
     {
-        MasterVolume = 1f; Sensitivity = DefaultSensitivity; AntiAliasing = PostAA.FXAA; Msaa = 1; VSync = true; Fullscreen = true;
+        MasterVolume = 1f; MusicVolume = DefaultMusicVolume; Sensitivity = DefaultSensitivity; AntiAliasing = PostAA.FXAA; Msaa = 1; VSync = true; Fullscreen = true;
         Save(); Apply();
     }
 
     static void Save()
     {
         PlayerPrefs.SetFloat("settings.volume", MasterVolume);
+        PlayerPrefs.SetFloat("settings.music", MusicVolume);
         PlayerPrefs.SetFloat("settings.sensitivity", Sensitivity);
         PlayerPrefs.SetInt("settings.aa", (int)AntiAliasing);
         PlayerPrefs.SetInt("settings.msaa", Msaa);
