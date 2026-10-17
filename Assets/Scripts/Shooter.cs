@@ -55,6 +55,7 @@ public class Shooter : MonoBehaviour
     public float kickKnockback = 10f;    // m/s backwards (~5 m with the player's knockback drag)
     public float kickLift = 3f;          // m/s upward hop
     public float kickParryWindow = 0.06f; // the right-click must land this close before impact (stakes: 0.2)
+    [Range(0f, 1f)] public float kickParriedDistance = 0.6f;  // a parried kick still shoves you this fraction as far (no damage)
 
     [Header("Animation")]
     public Animator anim;               // on the model: Throw / Hit / Kick triggers, Stunned bool
@@ -269,18 +270,21 @@ public class Shooter : MonoBehaviour
         if (target == null || !TargetInFront(kickReach)) return;   // they stepped back: whiff
 
         var block = target.GetComponent<PlayerBlock>();
-        if (block != null && block.TryParryMelee(kickParryWindow, 180f))   // a kick comes in low: guard down
+        bool parried = block != null && block.TryParryMelee(kickParryWindow, 180f);   // a kick comes in low: guard down
+
+        // parried: we're stunned and the player takes no damage, but is still pushed back a bit
+        if (parried) Stun(staggerTime);
+        else
         {
-            Stun(staggerTime);
-            return;
+            var player = target.GetComponent<Player>();
+            if (player != null) player.TakeDamage(kickDamage);
         }
 
-        var player = target.GetComponent<Player>();
-        if (player != null) player.TakeDamage(kickDamage);
         var move = target.GetComponent<PlayerMovement>();
         Vector3 away = target.position - transform.position;
         away.y = 0f;
-        if (move != null) move.Knockback(away.normalized * kickKnockback + Vector3.up * kickLift);
+        float push = parried ? Mathf.Sqrt(kickParriedDistance) : 1f;   // slide distance goes with speed squared
+        if (move != null) move.Knockback((away.normalized * kickKnockback + Vector3.up * kickLift) * push);
     }
 
     void Release()

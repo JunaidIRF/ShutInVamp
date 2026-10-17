@@ -487,6 +487,7 @@ MonoBehaviour:
   kickKnockback: 13.5
   kickLift: 4
   kickParryWindow: 0.06
+  kickParriedDistance: 0.6
   anim: {fileID: 7817265536408058280}
   ragdoll: {fileID: 3377334243892157605}
   deathKnockSpeed: 3.5
