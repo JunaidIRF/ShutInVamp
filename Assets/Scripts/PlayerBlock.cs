@@ -37,6 +37,7 @@ public class PlayerBlock : MonoBehaviour
     public Image guardArc;
     public Image incomingTemplate;          // red arc cloned per incoming bullet
     public float incomingArc = 40f;
+    public float kickArc = 60f;             // the kick warning at the bottom of the ring
     public float warnTime = 1.5f;           // indicator reaches full strength this close to impact
     public Color guardColor = Color.white;
     public Color blockFlashColor = new Color(0.5f, 0.8f, 1f);
@@ -153,12 +154,14 @@ public class PlayerBlock : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// A melee hit (the enemy kick) lands now: only a parry pressed within <paramref name="window"/>
-    /// seconds (while guarding) counts — blocking does nothing. True = parried.
+    /// A melee hit (the enemy kick) lands now from ring <paramref name="angle"/> (180 = below): only a parry
+    /// pressed within <paramref name="window"/> s with the guard over that angle counts — blocking does
+    /// nothing. True = parried.
     /// </summary>
-    public bool TryParryMelee(float window)
+    public bool TryParryMelee(float window, float angle)
     {
-        if (!isGuarding || parryLanded || Time.time - lastParryPress > window) return false;
+        bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(angle, guardAngle)) <= blockArc * 0.5f;
+        if (!covered || parryLanded || Time.time - lastParryPress > window) return false;
         parryLanded = true;
         Flash(parryFlashColor);
         if (juice != null) juice.Parry();
@@ -243,6 +246,21 @@ public class PlayerBlock : MonoBehaviour
             float timeToImpact = along / bullet.Speed;
             Color c = incomingTemplate.color;
             c.a = Mathf.Lerp(1f, 0.25f, Mathf.Clamp01(timeToImpact / warnTime));
+            arc.color = c;
+        }
+
+        // kicks: a red warning at the bottom of the ring for the whole wind-up, strongest at impact
+        foreach (Shooter s in Shooter.Kicking)
+        {
+            if (s == null) continue;
+            if (used == incomingPool.Count)
+                incomingPool.Add(Instantiate(incomingTemplate, incomingTemplate.transform.parent));
+            Image arc = incomingPool[used++];
+            arc.gameObject.SetActive(true);
+            PlaceArc(arc, 180f, kickArc);
+            Color c = incomingTemplate.color;
+            float k = 1f - Mathf.Clamp01(s.KickTimeToImpact / Mathf.Max(s.kickWindup, 0.0001f));
+            c.a = Mathf.Lerp(0.45f, 1f, k);
             arc.color = c;
         }
 

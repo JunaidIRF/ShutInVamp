@@ -8448,6 +8448,7 @@ MonoBehaviour:
   fovSpeedMultiplier: 1
   maxFov: 130
   fovSmoothSpeed: 8
+  knockbackDrag: 10
   velocity: {x: 0, y: 0, z: 0}
   isGrounded: 0
   isSprinting: 0
@@ -8578,6 +8579,7 @@ MonoBehaviour:
   guardArc: {fileID: 8319001754983015297}
   incomingTemplate: {fileID: 899237687363940655}
   incomingArc: 40
+  kickArc: 60
   warnTime: 1.5
   guardColor: {r: 1, g: 1, b: 1, a: 1}
   blockFlashColor: {r: 0.5, g: 0.8, b: 1, a: 1}

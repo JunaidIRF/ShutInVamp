@@ -1,7 +1,14 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Shooter : MonoBehaviour
 {
+    /// <summary>Shooters whose kick is winding up right now (the player's guard ring shows a warning).</summary>
+    public static readonly List<Shooter> Kicking = new List<Shooter>();
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() => Kicking.Clear();
+
     [Header("References")]
     public Transform target;            // falls back to the Player in the scene
     public Transform muzzle;
@@ -35,10 +42,12 @@ public class Shooter : MonoBehaviour
 
     [Header("Kick")]
     // when the player gets close (and we're not stunned) we kick them away
-    public float kickRange = 1.3f;       // starts a kick when the player is this close (flat distance)
+    public float kickRange = 2.5f;       // starts a kick when the player is this close (flat distance)
+    public float kickLungeTo = 1f;       // lunges in during the wind-up to stop this far from the player
+    public float kickLungeMax = 2f;      // never lunges further than this
     public float kickReach = 1.7f;       // still connects at the impact frame if they're within this
     public float kickMaxAngle = 70f;     // ... and roughly in front of us
-    public float kickWindup = 0.35f;     // the Kick clip's impact frame
+    public float kickWindup = 0.5f;      // the Kick state's impact moment (clip impact 0.35 s at state speed 0.7)
     public float kickCooldown = 3f;
     public float kickDamage = 25f;
     public float kickKnockback = 10f;    // m/s backwards (~5 m with the player's knockback drag)
@@ -69,6 +78,10 @@ public class Shooter : MonoBehaviour
     float releaseTime = -1f;            // when the current throw lets go of the stake (-1 = not throwing)
     float kickImpactTime = -1f;         // when the current kick lands (-1 = not kicking)
     float nextKickTime;
+    Vector3 lungeFrom, lungeTo;
+
+    /// <summary>Seconds until the current kick lands (only meaningful while in <see cref="Kicking"/>).</summary>
+    public float KickTimeToImpact => kickImpactTime - Time.time;
     float staggerEndTime;
     bool isStaggered;
     bool isDead;
@@ -124,7 +137,7 @@ public class Shooter : MonoBehaviour
         // Scene reload is off in this project — don't carry a stagger/bounce over from a previous run
         isStaggered = false;
         releaseTime = -1f;
-        kickImpactTime = -1f;
+        EndKick();
         nextKickTime = 0f;
         bounceStartTime = float.NegativeInfinity;
         bouncing = false;
@@ -155,9 +168,13 @@ public class Shooter : MonoBehaviour
 
         if (kickImpactTime >= 0f)
         {
+            // lunge in over the wind-up
+            float k = 1f - Mathf.Clamp01(KickTimeToImpact / Mathf.Max(kickWindup, 0.0001f));
+            transform.position = Vector3.Lerp(lungeFrom, lungeTo, Mathf.SmoothStep(0f, 1f, k));
+
             if (Time.time >= kickImpactTime)
             {
-                kickImpactTime = -1f;
+                EndKick();
                 KickImpact();
             }
             return;
@@ -175,9 +192,7 @@ public class Shooter : MonoBehaviour
 
         if (Time.time >= nextKickTime && TargetInFront(kickRange))
         {
-            if (anim != null) anim.SetTrigger(KickHash);
-            kickImpactTime = Time.time + kickWindup;
-            nextKickTime = Time.time + kickCooldown;
+            StartKick();
             return;
         }
 
@@ -189,6 +204,35 @@ public class Shooter : MonoBehaviour
             ScheduleNextShot();
         }
     }
+
+    void StartKick()
+    {
+        if (anim != null) anim.SetTrigger(KickHash);
+        kickImpactTime = Time.time + kickWindup;
+        nextKickTime = Time.time + kickCooldown;
+        if (!Kicking.Contains(this)) Kicking.Add(this);
+
+        // lunge to kickLungeTo from the player, but not through walls (the player and we don't count)
+        Vector3 to = target.position - transform.position;
+        to.y = 0f;
+        float lunge = Mathf.Clamp(to.magnitude - kickLungeTo, 0f, kickLungeMax);
+        Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : transform.forward;
+        Vector3 chest = ownCollider != null ? ownCollider.bounds.center : transform.position + Vector3.up;
+        int mask = ~((1 << gameObject.layer) | (1 << target.gameObject.layer));
+        if (lunge > 0f && Physics.SphereCast(chest, 0.3f, dir, out RaycastHit hit, lunge + 0.5f, mask, QueryTriggerInteraction.Ignore))
+            lunge = Mathf.Max(0f, hit.distance - 0.5f);
+        lungeFrom = transform.position;
+        lungeTo = transform.position + dir * lunge;
+    }
+
+    /// <summary>The kick is over (landed, or cancelled by a stun / execution / death).</summary>
+    void EndKick()
+    {
+        kickImpactTime = -1f;
+        Kicking.Remove(this);
+    }
+
+    void OnDisable() => Kicking.Remove(this);
 
     bool TargetInFront(float range)
     {
@@ -204,7 +248,7 @@ public class Shooter : MonoBehaviour
         if (target == null || !TargetInFront(kickReach)) return;   // they stepped back: whiff
 
         var block = target.GetComponent<PlayerBlock>();
-        if (block != null && block.TryParryMelee(kickParryWindow))
+        if (block != null && block.TryParryMelee(kickParryWindow, 180f))   // a kick comes in low: guard down
         {
             Stun(staggerTime);
             return;
@@ -278,7 +322,7 @@ public class Shooter : MonoBehaviour
         bounceStartTime = Time.time;
         bouncing = true;
         releaseTime = -1f;                 // a hit cancels a throw that hasn't let go yet
-        kickImpactTime = -1f;              // ... and a kick that hasn't landed
+        EndKick();                         // ... and a kick that hasn't landed
         if (anim != null)
         {
             anim.ResetTrigger(ThrowHash);
@@ -308,7 +352,7 @@ public class Shooter : MonoBehaviour
         isExecuted = true;
         isStaggered = false;
         releaseTime = -1f;
-        kickImpactTime = -1f;
+        EndKick();
         bouncing = false;
         if (ownCollider != null) ownCollider.enabled = false;   // the player stands closer than our capsule allows
         if (graphics != null)
@@ -351,7 +395,7 @@ public class Shooter : MonoBehaviour
         isExecuted = false;
         isStaggered = false;
         releaseTime = -1f;
-        kickImpactTime = -1f;
+        EndKick();
 
         // physics must see the real, unsquashed model
         bouncing = false;
