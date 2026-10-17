@@ -647,7 +647,9 @@ public class Dismemberment : MonoBehaviour
         body.subMeshCount = totalSubs;
         for (int sm = 0; sm < totalSubs; sm++)
         {
-            var list = sm < subCount ? keep[sm] : new List<int>();
+            // a copy: on a second cut the wound / bone / blood submeshes already exist, and the new cap's
+            // vertices mustn't end up in keep (the piece's middle below reads keep against the posed vertices)
+            var list = sm < subCount ? new List<int>(keep[sm]) : new List<int>();
             if (sm == capSub) list.AddRange(capTris);
             if (sm == boneSub) list.AddRange(boneTris);
             if (sm == bloodSub) list.AddRange(stainTris);
