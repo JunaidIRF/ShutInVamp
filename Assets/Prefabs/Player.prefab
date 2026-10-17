@@ -8376,7 +8376,6 @@ MonoBehaviour:
   punchRange: 1.7
   punchRadius: 0.35
   punchHitDelay: 0.1
-  punchStun: 0.6
   punchShake: 0.8
 --- !u!114 &8213888485866622640
 MonoBehaviour:
@@ -8572,6 +8571,7 @@ MonoBehaviour:
   blockArc: 60
   parryWindow: 0.2
   chipDamage: 0.2
+  parryHeal: 5
   anim: {fileID: 2954540343418349149}
   parryTag: Parry
   juice: {fileID: 5879824131008612246}

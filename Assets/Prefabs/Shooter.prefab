@@ -464,6 +464,9 @@ MonoBehaviour:
   bulletSpeed: 15
   damage: 20
   throwReleaseDelay: 0.28
+  maxThrowers: 2
+  throwTurnHold: 0.8
+  minStakeGap: 0.6
   minSpread: 0.5
   maxSpread: 0.8
   maxHealth: 100

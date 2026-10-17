@@ -26,6 +26,7 @@ public class PlayerBlock : MonoBehaviour
     public float blockArc = 60f;            // width of the guard, in degrees
     public float parryWindow = 0.2f;        // right-click must land this long before the hit
     [Range(0f, 1f)] public float chipDamage = 0.2f;
+    public float parryHeal = 5f;            // every parried stake / kick gives this much health back
 
     [Header("Animation")]
     public Animator anim;                   // Camera Head animator: Block<Dir> / Parry<Dir> states
@@ -171,6 +172,7 @@ public class PlayerBlock : MonoBehaviour
             if (juice != null) juice.Parry();
         }
         parryLanded = true;
+        if (player != null) player.Heal(parryHeal);
         return true;
     }
     public void ResolveHit(Bullet bullet)
@@ -186,6 +188,7 @@ public class PlayerBlock : MonoBehaviour
             bool first = !parryLanded;
             parryLanded = true; // a landed parry frees you straight away
             bullet.Reflect();
+            if (player != null) player.Heal(parryHeal);
             if (first)
             {
                 Flash(parryFlashColor);

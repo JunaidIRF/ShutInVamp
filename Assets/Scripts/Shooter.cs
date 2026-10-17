@@ -10,7 +10,11 @@ public class Shooter : MonoBehaviour
     public static readonly List<Shooter> Active = new List<Shooter>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics() { Kicking.Clear(); Active.Clear(); }
+    static void ResetStatics() { Kicking.Clear(); Active.Clear(); ThrowTurns.Clear(); StakeArrivals.Clear(); }
+
+    // group fairness: only a few enemies throw at once, and no two stakes arrive at the same moment
+    static readonly List<(Shooter who, float until)> ThrowTurns = new List<(Shooter, float)>();
+    static readonly List<float> StakeArrivals = new List<float>();
 
     [Header("References")]
     public Transform target;            // falls back to the Player in the scene
@@ -23,6 +27,13 @@ public class Shooter : MonoBehaviour
     public float bulletSpeed = 15f;
     public float damage = 20f;
     public float throwReleaseDelay = 0.28f; // wind-up before the stake leaves the hand (the Throw clip's release frame)
+
+    [Header("Group")]
+    // with several enemies: only maxThrowers throw at once (a turn lasts the wind-up + throwTurnHold), and
+    // every stake is timed to reach the player at least minStakeGap after any other, so each can be parried
+    public int maxThrowers = 2;
+    public float throwTurnHold = 0.8f;
+    public float minStakeGap = 0.6f;
 
     [Header("Spread")]
     // Each shot aims at a random point around the target's body outline (head, feet, sides...),
@@ -284,11 +295,40 @@ public class Shooter : MonoBehaviour
 
         if (Time.time >= nextFireTime && hasSight)   // no stakes into walls
         {
-            // wind up first; the stake leaves the hand at the release frame
-            if (anim != null) anim.SetTrigger(ThrowHash);
-            releaseTime = Time.time + throwReleaseDelay;
-            ScheduleNextShot();
+            if (TryTakeThrowTurn())
+            {
+                // wind up first; the stake leaves the hand at the release frame
+                if (anim != null) anim.SetTrigger(ThrowHash);
+                releaseTime = Time.time + throwReleaseDelay;
+                ScheduleNextShot();
+            }
+            else nextFireTime = Time.time + Random.Range(0.15f, 0.4f);   // someone else's turn: try again shortly
         }
+    }
+
+    /// <summary>
+    /// May we throw now? Not if maxThrowers others are mid-turn, or if our stake would reach the player
+    /// within minStakeGap of another one. Taking the turn books our slot and our stake's arrival time.
+    /// </summary>
+    bool TryTakeThrowTurn()
+    {
+        float now = Time.time;
+        ThrowTurns.RemoveAll(t => t.who == null || t.who.isDead || t.until <= now);
+        StakeArrivals.RemoveAll(a => a < now - minStakeGap);
+
+        int others = 0;
+        foreach (var t in ThrowTurns) if (t.who != this) others++;
+        if (others >= maxThrowers) return false;
+
+        Vector3 from = muzzle != null ? muzzle.position : transform.position;
+        Vector3 to = targetCollider != null ? targetCollider.bounds.center : target.position;
+        float arrival = now + throwReleaseDelay + Vector3.Distance(from, to) / Mathf.Max(bulletSpeed, 0.01f);
+        foreach (float a in StakeArrivals)
+            if (Mathf.Abs(a - arrival) < minStakeGap) return false;
+
+        ThrowTurns.Add((this, now + throwReleaseDelay + throwTurnHold));
+        StakeArrivals.Add(arrival);
+        return true;
     }
 
     void StartKick()
