@@ -1,16 +1,16 @@
 using UnityEngine;
-using UnityEngine.Rendering;
 
 /// <summary>
-/// Subtle speed feel: fades in a post-process volume (slight lens stretch, a touch of edge fringing and a
-/// soft vignette — Assets/Settings/SpeedFeedback.asset) when moving fast: strongest while sliding,
-/// building up when falling fast, faint at full sprint. Lower priority than the hurt / parry / burn
-/// volumes, so those win while they play.
+/// Speed feel: faint air streaks in the world that fly past the camera when moving fast. A world-space
+/// particle system is kept a little ahead of the camera along the travel direction; its particles stay
+/// put, so moving makes them stream past with real parallax, stretched by the camera's own speed.
+/// Strongest while sliding, building up when falling fast, faint at full sprint.
 /// </summary>
 public class SpeedOverlay : MonoBehaviour
 {
     public PlayerMovement movement;
-    public Volume volume;                   // SpeedVolume (global, weight driven here)
+    public ParticleSystem streaks;          // AirStreaks (world simulation space)
+    public Transform view;                  // Player Camera
 
     [Header("How strong")]
     public float slideStrength = 1f;        // at slide start speed (scales with the slide's speed)
@@ -19,6 +19,11 @@ public class SpeedOverlay : MonoBehaviour
     public float fallFullSpeed = 20f;
     public float fallStrength = 0.8f;
     public float sprintStrength = 0.3f;     // at full sprint speed
+
+    [Header("Streaks")]
+    public float maxRate = 120f;            // particles per second at full strength
+    public float spawnAhead = 0.35f;        // seconds of travel ahead of the camera they appear
+    public float minAhead = 2.5f;           // ... but at least this far (m)
 
     [Header("Easing")]
     public float fadeIn = 6f;               // per second
@@ -30,18 +35,18 @@ public class SpeedOverlay : MonoBehaviour
     {
         if (movement == null) movement = GetComponent<PlayerMovement>();
         strength = 0f;
-        Apply();
+        Apply(Vector3.zero);
     }
 
     void OnDisable()
     {
         strength = 0f;
-        Apply();
+        Apply(Vector3.zero);
     }
 
     void Update()
     {
-        if (movement == null || volume == null) return;
+        if (movement == null || streaks == null || view == null) return;
         Vector3 v = movement.velocity;
         float flat = new Vector3(v.x, 0f, v.z).magnitude;
 
@@ -53,11 +58,20 @@ public class SpeedOverlay : MonoBehaviour
 
         float rate = want > strength ? fadeIn : fadeOut;
         strength = Mathf.MoveTowards(strength, want, rate * Time.unscaledDeltaTime);
-        Apply();
+        Apply(v);
     }
 
-    void Apply()
+    void Apply(Vector3 velocity)
     {
-        if (volume != null) volume.weight = strength;
+        if (streaks == null) return;
+        var emission = streaks.emission;
+        emission.rateOverTime = strength * maxRate;
+        if (strength <= 0f || view == null) return;
+
+        // the spawn volume sits ahead along where we're going, facing that way
+        float speed = velocity.magnitude;
+        Vector3 dir = speed > 0.5f ? velocity / speed : view.forward;
+        streaks.transform.SetPositionAndRotation(view.position + dir * Mathf.Max(minAhead, speed * spawnAhead), Quaternion.LookRotation(dir));
+        if (!streaks.isPlaying) streaks.Play();
     }
 }
