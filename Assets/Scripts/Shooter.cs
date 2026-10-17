@@ -166,6 +166,18 @@ public class Shooter : MonoBehaviour
             ScheduleNextShot();
         }
 
+        // the player is executing someone (not us): hold off — no new attacks, and a throw or kick
+        // that hasn't landed yet is dropped (stakes already in the air keep flying)
+        if (PlayerExecution.IsExecuting)
+        {
+            if (kickImpactTime >= 0f) EndKick();
+            releaseTime = -1f;
+            if (anim != null) { anim.ResetTrigger(ThrowHash); anim.ResetTrigger(KickHash); }
+            nextFireTime = Mathf.Max(nextFireTime, Time.time + Random.Range(0.6f, 1.2f));   // staggered restart
+            nextKickTime = Mathf.Max(nextKickTime, Time.time + 0.6f);
+            return;
+        }
+
         if (kickImpactTime >= 0f)
         {
             // lunge in over the wind-up

@@ -548,6 +548,7 @@ public class PlayerMovement : MonoBehaviour
     /// <summary>Shove the player: horizontal part slides and slows down by knockbackDrag, upward part is a hop.</summary>
     public void Knockback(Vector3 push)
     {
+        if (PlayerExecution.IsExecuting) return;   // an execution owns the player's position
         knockVelocity = new Vector3(push.x, 0f, push.z);
         if (push.y > 0f) velocity.y = Mathf.Max(velocity.y, push.y);
     }

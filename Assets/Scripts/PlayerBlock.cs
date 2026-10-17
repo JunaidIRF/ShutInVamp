@@ -161,10 +161,14 @@ public class PlayerBlock : MonoBehaviour
     public bool TryParryMelee(float window, float angle)
     {
         bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(angle, guardAngle)) <= blockArc * 0.5f;
-        if (!covered || parryLanded || Time.time - lastParryPress > window) return false;
+        if (!covered || Time.time - lastParryPress > window) return false;
+        // like stakes: one parry covers every kick landing in its window
+        if (!parryLanded)
+        {
+            Flash(parryFlashColor);
+            if (juice != null) juice.Parry();
+        }
         parryLanded = true;
-        Flash(parryFlashColor);
-        if (juice != null) juice.Parry();
         return true;
     }
     public void ResolveHit(Bullet bullet)
@@ -173,12 +177,18 @@ public class PlayerBlock : MonoBehaviour
         float hitAngle = BodyAngle(bullet.transform.position - Center);
         bool covered = isGuarding && Mathf.Abs(Mathf.DeltaAngle(hitAngle, guardAngle)) <= blockArc * 0.5f;
 
-        if (covered && InParryWindow && !parryLanded)
+        // a parry stays active for its whole window: every stake the guard covers in it is reflected
+        // (stakes from another side need their own parry — press again once one has landed)
+        if (covered && InParryWindow)
         {
+            bool first = !parryLanded;
             parryLanded = true; // a landed parry frees you straight away
-            Flash(parryFlashColor);
             bullet.Reflect();
-            if (juice != null) juice.Parry();
+            if (first)
+            {
+                Flash(parryFlashColor);
+                if (juice != null) juice.Parry();   // slow-mo etc. once per parry, not per stake
+            }
             return;
         }
 
