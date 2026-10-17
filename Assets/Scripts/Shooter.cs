@@ -10,9 +10,11 @@ public class Shooter : MonoBehaviour
     public static readonly List<Shooter> Active = new List<Shooter>();
     /// <summary>A shooter just died (any way: claws, execution, stake...). The vampire feeds on it.</summary>
     public static event System.Action<Shooter> Killed;
+    /// <summary>A shooter was just finished off by an execution (after <see cref="Killed"/>).</summary>
+    public static event System.Action<Shooter> Executed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics() { Kicking.Clear(); Active.Clear(); ThrowTurns.Clear(); StakeArrivals.Clear(); Killed = null; }
+    static void ResetStatics() { Kicking.Clear(); Active.Clear(); ThrowTurns.Clear(); StakeArrivals.Clear(); Killed = null; Executed = null; }
 
     // group fairness: only a few enemies throw at once, and no two stakes arrive at the same moment
     static readonly List<(Shooter who, float until)> ThrowTurns = new List<(Shooter, float)>();
@@ -811,6 +813,7 @@ public class Shooter : MonoBehaviour
         UpdateHealthBar();
         Die(point, direction, bodySpeed, hitSpeed, lift);
         if (decapitate) { var cut = FindDismemberment(); if (cut != null) cut.Sever(Dismemberment.BodyPart.Head, direction); }
+        Executed?.Invoke(this);
     }
 
     /// <summary>Cuts <paramref name="part"/> off (alive or dead), if the model has a Dismemberment.</summary>

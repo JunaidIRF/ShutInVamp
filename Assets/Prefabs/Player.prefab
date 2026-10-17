@@ -9628,9 +9628,8 @@ MonoBehaviour:
   lingerTime: 0.5
   burnTickDamage: 15
   burnTickInterval: 0.2
-  wardPerKill: 2
+  wardPerExecution: 4
   wardMax: 8
-  wardedTickDamage: 0.8
   wardFill: {fileID: 4830212921372881858}
   wardFillGraphic: {fileID: 4596375979323776769}
   wardColor: {r: 1, g: 0.42, b: 0.12, a: 1}
@@ -9657,6 +9656,7 @@ MonoBehaviour:
   iconShade: {r: 0.7, g: 0.7, b: 0.7, a: 0.3}
   iconSun: {r: 1, g: 0.95, b: 0.6, a: 1}
   iconFire: {r: 1, g: 0.5, b: 0.1, a: 1}
+  iconWarded: {r: 1, g: 0.42, b: 0.12, a: 0.85}
   iconPulse: 0.15
 --- !u!114 &966134056652523022
 MonoBehaviour:

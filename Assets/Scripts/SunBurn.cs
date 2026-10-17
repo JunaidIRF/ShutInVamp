@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -7,7 +8,7 @@ using UnityEngine.UI;
 /// the player warms up and, after a short moment, catches fire: steady burn damage while lit, lingering
 /// briefly after reaching shade. Safe exactly where the scene draws shadow.
 /// Drives a warm grade + flickering edge glow (a warning while warming up) and flames on the hands.
-/// Bare, the sun kills in a couple of seconds. Every kill feeds a sun ward (seconds of protection, capped):
+/// Bare, the sun kills in a couple of seconds. Every execution (not a plain kill) feeds a sun ward (seconds of protection, capped):
 /// while it lasts you don't burn at all (no fire, no burn look), and it drains while you're in the light — enough
 /// to dash across a street.
 /// </summary>
@@ -28,11 +29,12 @@ public class SunBurn : MonoBehaviour
     public float burnTickDamage = 15f;      // bare skin...
     public float burnTickInterval = 0.2f;   // ...15 every 0.2 s = 75 HP/s: a sunlit street is death without the ward
 
-    [Header("Sun ward (kills buy time in the sun)")]
-    public float wardPerKill = 2f;          // s of protection each kill gives...
+    [Header("Sun ward (executions buy time in the sun)")]
+    [FormerlySerializedAs("wardPerKill")]
+    public float wardPerExecution = 4f;     // s of protection each execution gives (plain kills give none)...
     public float wardMax = 8f;              // ...stacking up to this
     public RectTransform wardFill;          // HUD3D/WardBar/Fill: x scale = how much ward is left
-    public Graphic wardFillGraphic;         // flashes bright when a kill tops it up
+    public Graphic wardFillGraphic;         // flashes bright when an execution tops it up
     public Color wardColor = new Color(1f, 0.42f, 0.12f, 1f);
     public Color wardGainColor = new Color(1f, 0.9f, 0.55f, 1f);
 
@@ -104,11 +106,11 @@ public class SunBurn : MonoBehaviour
         loopSource.Stop();
     }
 
-    void OnEnable() => Shooter.Killed += OnKill;
+    void OnEnable() => Shooter.Executed += OnExecution;
 
-    void OnKill(Shooter _)
+    void OnExecution(Shooter _)
     {
-        Ward = Mathf.Min(Ward + wardPerKill, wardMax);
+        Ward = Mathf.Min(Ward + wardPerExecution, wardMax);
         wardFlash = 1f;
         UpdateWardBar();
     }
@@ -129,7 +131,7 @@ public class SunBurn : MonoBehaviour
 
     void OnDisable()
     {
-        Shooter.Killed -= OnKill;
+        Shooter.Executed -= OnExecution;
         OnFire = false;
         SetHandFires(false, true);
         ApplyLook(0f);
@@ -167,7 +169,7 @@ public class SunBurn : MonoBehaviour
         if (burning) lastLitTime = Time.time;
 
         if (!OnFire && exposure >= 1f) Ignite();
-        else if (OnFire && Ward > 0f) Extinguish();   // a kill while burning puts it out
+        else if (OnFire && Ward > 0f) Extinguish();   // an execution while burning puts it out
         else if (OnFire && !burning && Time.time - lastLitTime > lingerTime) Extinguish();
 
         if (OnFire && Time.time >= nextTickTime)
