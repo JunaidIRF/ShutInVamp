@@ -609,21 +609,24 @@ public class Shooter : MonoBehaviour
     {
         ScheduleNextShot();   // don't throw straight after a kick
         if (target == null || !TargetInFront(kickReach)) return;   // they stepped back: whiff
+        // who this kick hits, for the whole impact: the damage can kill them, and dying clears our target
+        // (the wave director stops everyone)
+        Transform victim = target;
 
-        var block = target.GetComponent<PlayerBlock>();
+        var block = victim.GetComponent<PlayerBlock>();
         bool parried = block != null && block.TryParryMelee(kickParryWindow, 180f);   // a kick comes in low: guard down
 
         // parried: we're stunned and the player takes no damage, but is still pushed back a bit
         if (parried) Stun(staggerTime);
         else
         {
-            var player = target.GetComponent<Player>();
+            var player = victim.GetComponent<Player>();
             if (player != null) player.TakeDamage(kickDamage);
             if (block != null) block.HitPop();
         }
 
-        var move = target.GetComponent<PlayerMovement>();
-        Vector3 away = target.position - transform.position;
+        var move = victim.GetComponent<PlayerMovement>();
+        Vector3 away = victim.position - transform.position;
         away.y = 0f;
         float push = parried ? Mathf.Sqrt(kickParriedDistance) : 1f;   // slide distance goes with speed squared
         if (move != null) move.Knockback((away.normalized * kickKnockback + Vector3.up * kickLift) * push);
