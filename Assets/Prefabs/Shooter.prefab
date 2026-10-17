@@ -1378,6 +1378,14 @@ MonoBehaviour:
   pieceLifetime: 20
   woundColor: {r: 0.3, g: 0.02, b: 0.025, a: 1}
   woundDepth: 0.3
+  boneColor: {r: 0.86, g: 0.82, b: 0.72, a: 1}
+  boneSize: 0.32
+  boneLength: 0.45
+  bloodColor: {r: 0.2, g: 0, b: 0.01, a: 1}
+  stainAround: 0.05
+  stainDrip: 0.3
+  bleedTime: 6
+  bleedStrength: 0.15
   bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
   jetFx: {fileID: 3654356420683697179, guid: 512ed9afcf5c09f408fde5149cd32327, type: 3}
   spurts: 5

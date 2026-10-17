@@ -92,6 +92,20 @@ public class Dismemberment : MonoBehaviour
     [FormerlySerializedAs("stumpColor")] public Color woundColor = new Color(0.3f, 0.02f, 0.025f);
     [Tooltip("How far the middle of the wound sinks in, as a share of the hole's radius")]
     [Range(0f, 1f)] public float woundDepth = 0.3f;
+    public Color boneColor = new Color(0.86f, 0.82f, 0.72f);
+    [Tooltip("Bone sticking out of the wound: its width and how far it sticks out, as shares of the hole's radius (0 = no bone)")]
+    [Range(0f, 1f)] public float boneSize = 0.32f;
+    [Range(0f, 2f)] public float boneLength = 0.45f;
+    [Tooltip("Wet blood on the skin: around the wound, and running down from it")]
+    public Color bloodColor = new Color(0.2f, 0f, 0.01f);
+    public float stainAround = 0.05f;       // m past the edge of the wound
+    public float stainDrip = 0.3f;          // m it runs down below the wound
+
+    [Header("Bleeding")]
+    [Tooltip("After the spurts, the wound keeps dribbling this long (s), fading out")]
+    public float bleedTime = 6f;
+    [Tooltip("How hard it dribbles, as a share of the first spurt")]
+    [Range(0f, 1f)] public float bleedStrength = 0.15f;
 
     [Header("Blood")]
     public GameObject bloodFx;              // one splash at the cut; falls back to the Shooter's blood effect
@@ -106,7 +120,7 @@ public class Dismemberment : MonoBehaviour
     readonly List<Transform> severed = new List<Transform>();                  // bones cut off so far
     readonly List<(Transform bone, GameObject go)> jets = new List<(Transform, GameObject)>();   // blood jets on the body
     readonly List<Collider> pieces = new List<Collider>();                     // severed parts still around
-    Material woundMaterial;
+    CutLook look;
 
     void OnEnable()
     {
@@ -182,7 +196,7 @@ public class Dismemberment : MonoBehaviour
     {
         if (!CanCut(bone) || IsCut(bone)) return false;
         if (bloodFx == null) { var s = GetComponentInParent<Shooter>(); if (s != null) bloodFx = s.bloodFx; }
-        if (woundMaterial == null) woundMaterial = MakeWoundMaterial(BodyMaterial(), woundColor);
+        if (look == null || look.wound == null) look = MakeLook(BodyMaterial());
 
         Part tuned = parts.Find(p => p.bone == bone.name);
         string partName = tuned != null ? Label(tuned.part) : BoneLabel(bone.name);
@@ -207,7 +221,7 @@ public class Dismemberment : MonoBehaviour
             Vector3[] posedV = baked.vertices, posedN = baked.normals;
             Destroy(baked);
 
-            CutResult cut = CutMesh(smr, original, smr.sharedMaterials, woundMaterial, bone, posedV, posedN, woundDepth);
+            CutResult cut = CutMesh(smr, original, smr.sharedMaterials, look, bone, posedV, posedN);
             if (cut == null) continue;
             cut.body.name = original.name + " (no " + partName + ")";
             done[original] = cut.body;
@@ -341,6 +355,26 @@ public class Dismemberment : MonoBehaviour
             ps.Play(true);
             yield return new WaitForSeconds(spurtInterval);
         }
+
+        // then it keeps bleeding: a weak, wide dribble that spills out and runs down, fading away
+        float bleed = onBody ? bleedTime : bleedTime * 0.5f;
+        if (fx != null && bleed > 0f && bleedStrength > 0f)
+        {
+            emission.burstCount = 0;                         // no gush each time it restarts
+            var shape = ps.shape;
+            shape.angle = Mathf.Max(shape.angle, 30f);
+            main.startSpeedMultiplier = speed * bleedStrength * strength;
+            float step = Mathf.Max(0.05f, main.duration);
+            for (float t = 0f; t < bleed && fx != null; t += step)
+            {
+                float fade = 1f - t / bleed;
+                emission.rateOverTimeMultiplier = rate * bleedStrength * strength * (0.3f + 0.7f * fade);
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                ps.Play(true);
+                yield return new WaitForSeconds(step);
+            }
+            if (fx != null) ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        }
         if (fx != null) Destroy(fx, bloodLifetime);
     }
 
@@ -371,16 +405,32 @@ public class Dismemberment : MonoBehaviour
         along = along.sqrMagnitude > 0.000001f ? along.normalized : Vector3.up;
     }
 
-    /// <summary>The flat dark flesh the wound caps are drawn with.</summary>
-    public static Material MakeWoundMaterial(Material body, Color color)
+    /// <summary>How a cut looks: its materials (flesh, bone, wet blood on the skin) and shapes.</summary>
+    public class CutLook
+    {
+        public Material wound, bone, blood;
+        public float depth, boneSize, boneLength, stainAround, stainDrip;
+    }
+
+    /// <summary>This model's cut look, with new materials made from <paramref name="body"/>.</summary>
+    public CutLook MakeLook(Material body) => new CutLook
+    {
+        wound = MakeFlatMaterial(body, woundColor, 0.35f, "Wound"),
+        bone = MakeFlatMaterial(body, boneColor, 0.3f, "Bone"),
+        blood = MakeFlatMaterial(body, bloodColor, 0.8f, "Blood"),
+        depth = woundDepth, boneSize = boneSize, boneLength = boneLength, stainAround = stainAround, stainDrip = stainDrip,
+    };
+
+    /// <summary>An untextured copy of <paramref name="body"/> in one colour.</summary>
+    public static Material MakeFlatMaterial(Material body, Color color, float smoothness, string name)
     {
         Material mat = body != null ? new Material(body) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
-        mat.name = "Wound";
+        mat.name = name;
         if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
         if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
         if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
         if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", null);
-        if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.35f);
+        if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
         if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
         return mat;
     }
@@ -405,9 +455,10 @@ public class Dismemberment : MonoBehaviour
     /// with a slightly sunken cap in the wound submesh. With <paramref name="posed"/> (baked, renderer space
     /// without scale) it also builds the cut-off piece. Null if nothing goes with the bone.
     /// </summary>
-    public static CutResult CutMesh(SkinnedMeshRenderer smr, Mesh mesh, Material[] materials, Material wound, Transform bone,
-                                    Vector3[] posed, Vector3[] posedNormals, float depth)
+    public static CutResult CutMesh(SkinnedMeshRenderer smr, Mesh mesh, Material[] materials, CutLook look, Transform bone,
+                                    Vector3[] posed, Vector3[] posedNormals)
     {
+        float depth = look.depth;
         float[] share = PartShare(smr, mesh, new[] { bone }, out HashSet<int> partBones);
         if (share == null) return null;
 
@@ -425,10 +476,19 @@ public class Dismemberment : MonoBehaviour
         var P = posed != null ? new List<Vector3>(posed) : null;
         var PN = posed != null ? new List<Vector3>(posedNormals != null && posedNormals.Length == n0 ? posedNormals : new Vector3[n0]) : null;
 
+        // submeshes: the mesh's own, then flesh / bone / blood (already there after an earlier cut, else added)
         int subCount = mesh.subMeshCount;
-        int woundSub = Array.IndexOf(materials, wound);
-        if (woundSub >= subCount) woundSub = -1;
-        int capSub = woundSub >= 0 ? woundSub : subCount;
+        var mats = new List<Material>(subCount + 3);
+        for (int i = 0; i < subCount; i++) mats.Add(i < materials.Length ? materials[i] : null);
+        int SubFor(Material m)
+        {
+            int i = mats.IndexOf(m);
+            if (i >= 0) return i;
+            mats.Add(m);
+            return mats.Count - 1;
+        }
+        int capSub = SubFor(look.wound), boneSub = SubFor(look.bone), bloodSub = SubFor(look.blood);
+        int totalSubs = mats.Count;
         var tris = new int[subCount][];
         for (int sm = 0; sm < subCount; sm++) tris[sm] = mesh.GetTriangles(sm);
 
@@ -527,7 +587,9 @@ public class Dismemberment : MonoBehaviour
         for (int v = 0; v < V.Count; v++) world[v] = Skin(boneSkin, bw[v]).MultiplyPoint3x4(V[v]);
         foreach (var list in cut) foreach (int v in list) { partWorld += Skin(boneSkin, W[v]).MultiplyPoint3x4(V[v]); partCount++; }
         if (partCount > 0) partWorld /= partCount;
-        if (Shape(bodyRim, world, weld, partWorld, depth, out var bodyEdges, out Vector3 middleW, out Vector3 normalW))
+        var boneTris = new List<int>();
+        var stainTris = new List<int>();
+        if (Shape(bodyRim, world, weld, partWorld, depth, out var bodyEdges, out Vector3 middleW, out Vector3 normalW, out float radiusW))
         {
             var rimWeights = bw.ToArray();
             BoneWeight middleWeight = Blend(bodyEdges, rimWeights);
@@ -541,39 +603,56 @@ public class Dismemberment : MonoBehaviour
             bw.Add(middleWeight);
             result.capCentre = centreIndex;
             result.hasWound = true;
+
+            // the bone sticking out of it, moving with the middle of the wound
+            int added = Stub(middleW, normalW, radiusW, look, p => toMesh.MultiplyPoint3x4(p), n => toMesh.MultiplyVector(n).normalized, V, N, T, UV, boneTris);
+            for (int i = 0; i < added; i++) bw.Add(middleWeight);
+
+            // wet blood on the skin around the wound and running down from it (where the skin is right now)
+            for (int sm = 0; sm < subCount; sm++)
+            {
+                if (sm == capSub || sm == boneSub || sm == bloodSub) continue;
+                var kept = new List<int>(keep[sm].Count);
+                var list = keep[sm];
+                for (int i = 0; i + 2 < list.Count; i += 3)
+                {
+                    bool wet = Stained(world[list[i]], middleW, radiusW, look) && Stained(world[list[i + 1]], middleW, radiusW, look) && Stained(world[list[i + 2]], middleW, radiusW, look);
+                    (wet ? stainTris : kept).AddRange(new[] { list[i], list[i + 1], list[i + 2] });
+                }
+                keep[sm] = kept;
+            }
         }
 
         var body = new Mesh();
         if (V.Count > 65535) body.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        // the original's exact vertex layout (streams, formats): the renderer switches between the two meshes, and
+        // skinning set up for one layout stops rendering on the other
+        body.SetVertexBufferParams(V.Count, mesh.GetVertexAttributes());
         body.SetVertices(V);
         body.SetNormals(N);
         if (T != null) body.SetTangents(T);
         if (hasUV) body.SetUVs(0, UV);
         body.boneWeights = bw.ToArray();
         body.bindposes = mesh.bindposes;
-        body.subMeshCount = Mathf.Max(subCount, capSub + 1);
-        for (int sm = 0; sm < body.subMeshCount; sm++)
+        body.subMeshCount = totalSubs;
+        for (int sm = 0; sm < totalSubs; sm++)
         {
             var list = sm < subCount ? keep[sm] : new List<int>();
             if (sm == capSub) list.AddRange(capTris);
+            if (sm == boneSub) list.AddRange(boneTris);
+            if (sm == bloodSub) list.AddRange(stainTris);
             body.SetTriangles(list, sm);
         }
         body.RecalculateBounds();
         result.body = body;
-        if (woundSub >= 0) result.bodyMaterials = materials;
-        else
-        {
-            result.bodyMaterials = new Material[subCount + 1];
-            for (int i = 0; i < subCount; i++) result.bodyMaterials[i] = i < materials.Length ? materials[i] : null;
-            result.bodyMaterials[subCount] = wound;
-        }
+        result.bodyMaterials = mats.ToArray();
 
         if (P == null) return result;
 
         // ── the piece, in its pose: only the vertices its triangles use, its end capped too ──
         var remap = new Dictionary<int, int>();
         var pv = new List<Vector3>(); var pn = new List<Vector3>(); var puv = new List<Vector2>();
-        var pieceSubs = new List<int>[body.subMeshCount];
+        var pieceSubs = new List<int>[totalSubs];
         for (int sm = 0; sm < pieceSubs.Length; sm++)
         {
             pieceSubs[sm] = new List<int>();
@@ -603,8 +682,25 @@ public class Dismemberment : MonoBehaviour
         var pieceCap = new List<int>();
         var posedArray = P.ToArray();
         var piecePos = pv.ToArray();
-        if (Shape(pieceRim, piecePos, pieceWeld, Middle(posedArray, keep), depth, out var pieceEdges, out Vector3 pm, out Vector3 pnrm))
+        if (Shape(pieceRim, piecePos, pieceWeld, Middle(posedArray, keep), depth, out var pieceEdges, out Vector3 pm, out Vector3 pnrm, out float pr))
+        {
             Fan(pieceEdges, piecePos, pm, pnrm, v => piecePos[v], (v, n) => n, pm, pnrm, pv, pn, null, puv, pieceCap, new List<int>(), out _);
+            Stub(pm, pnrm, pr, look, p => p, n => n, pv, pn, null, puv, pieceSubs[boneSub]);
+            // blood around its end (it tumbles, so nothing runs down)
+            var ring = new CutLook { stainAround = look.stainAround * 0.5f, stainDrip = 0f };
+            for (int sm = 0; sm < subCount; sm++)
+            {
+                if (sm == capSub || sm == boneSub || sm == bloodSub) continue;
+                var kept = new List<int>(pieceSubs[sm].Count);
+                var list = pieceSubs[sm];
+                for (int i = 0; i + 2 < list.Count; i += 3)
+                {
+                    bool wet = Stained(piecePos[list[i]], pm, pr, ring) && Stained(piecePos[list[i + 1]], pm, pr, ring) && Stained(piecePos[list[i + 2]], pm, pr, ring);
+                    (wet ? pieceSubs[bloodSub] : kept).AddRange(new[] { list[i], list[i + 1], list[i + 2] });
+                }
+                pieceSubs[sm] = kept;
+            }
+        }
         pieceSubs[capSub].AddRange(pieceCap);
 
         var piece = new Mesh();
@@ -696,9 +792,9 @@ public class Dismemberment : MonoBehaviour
     /// taken away, towards <paramref name="towards"/>). False if there's no usable opening.
     /// </summary>
     static bool Shape(List<(int a, int b)> rim, IList<Vector3> geo, IList<int> weld, Vector3 towards, float depth,
-                      out List<(int a, int b)> edges, out Vector3 middle, out Vector3 normal)
+                      out List<(int a, int b)> edges, out Vector3 middle, out Vector3 normal, out float radius)
     {
-        edges = null; middle = Vector3.zero;
+        edges = null; middle = Vector3.zero; radius = 0f;
         if (!PlaneOf(rim, geo, weld, towards, out Vector3 centre, out normal)) return false;
         var dist = new List<float>(rim.Count);
         foreach (var (a, b) in rim) dist.Add(((geo[a] + geo[b]) * 0.5f - centre).magnitude);
@@ -708,7 +804,97 @@ public class Dismemberment : MonoBehaviour
         for (int i = 0; i < rim.Count; i++) if (dist[i] <= median * 3f + 1e-9f) edges.Add(rim[i]);
         if (edges.Count < 3) return false;
         middle = centre - normal * depth * median;   // sunk into the side that stays
+        radius = median;
         return true;
+    }
+
+    /// <summary>
+    /// Whether skin at <paramref name="p"/> is wet with blood: near the wound (its middle, radius), or in the streak
+    /// running straight down from it, narrowing as it goes. Same space as the arguments (real metres).
+    /// </summary>
+    static bool Stained(Vector3 p, Vector3 middle, float radius, CutLook look)
+    {
+        Vector3 d = p - middle;
+        float around = Mathf.Min(look.stainAround, radius * 0.6f);   // a small wound wets a small border
+        if (d.magnitude <= radius + around) return true;
+        if (look.stainDrip <= 0f) return false;
+        float below = -d.y;
+        if (below <= 0f || below > look.stainDrip) return false;
+        float sideways = new Vector2(d.x, d.z).magnitude;
+        return sideways <= radius * 0.6f * (1f - below / look.stainDrip) + 0.01f;
+    }
+
+    /// <summary>
+    /// A bone end sticking out of a wound (its middle, facing, radius; in the space they're given): a short
+    /// eight-sided post from inside the flesh out along the facing, with a slightly domed end. Positions and
+    /// normals go out through <paramref name="pointOut"/> / <paramref name="normalOut"/>. Returns the vertices added.
+    /// </summary>
+    static int Stub(Vector3 middle, Vector3 normal, float radius, CutLook look, Func<Vector3, Vector3> pointOut, Func<Vector3, Vector3> normalOut,
+                    List<Vector3> outV, List<Vector3> outN, List<Vector4> outT, List<Vector2> outUV, List<int> outTris)
+    {
+        if (look.boneSize <= 0f || look.boneLength <= 0f || radius <= 0f) return 0;
+        const int sides = 8;
+        float r = look.boneSize * radius, length = look.boneLength * radius;
+        Vector3 u = Vector3.Cross(normal, Mathf.Abs(normal.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
+        Vector3 w = Vector3.Cross(normal, u);
+        Vector3 bottom = middle - normal * (length * 0.5f), top = middle + normal * length;
+        int first = outV.Count;
+        void Add(Vector3 p, Vector3 n)
+        {
+            outV.Add(pointOut(p));
+            outN.Add(normalOut(n));
+            outT?.Add(new Vector4(1f, 0f, 0f, 1f));
+            outUV?.Add(Vector2.zero);
+        }
+        for (int i = 0; i < sides; i++)   // side: bottom ring, top ring (a little narrower)
+        {
+            float a = i * Mathf.PI * 2f / sides;
+            Vector3 dir = u * Mathf.Cos(a) + w * Mathf.Sin(a);
+            Add(bottom + dir * r, dir);
+            Add(top + dir * r * 0.85f, dir);
+        }
+        for (int i = 0; i < sides; i++)   // end: its own ring (own normals) and a domed tip
+        {
+            float a = i * Mathf.PI * 2f / sides;
+            Vector3 dir = u * Mathf.Cos(a) + w * Mathf.Sin(a);
+            Add(top + dir * r * 0.85f, (normal + dir * 0.4f).normalized);
+        }
+        Add(top + normal * r * 0.3f, normal);
+        int tip = outV.Count - 1;
+
+        // triangles, wound so they face out (checked on the shape, not assumed)
+        var tris = new List<int>();
+        var geo = new List<Vector3>();
+        for (int i = 0; i < sides; i++)
+        {
+            float a = i * Mathf.PI * 2f / sides;
+            Vector3 dir = u * Mathf.Cos(a) + w * Mathf.Sin(a);
+            geo.Add(bottom + dir * r); geo.Add(top + dir * r * 0.85f);
+        }
+        for (int i = 0; i < sides; i++) { float a = i * Mathf.PI * 2f / sides; geo.Add(top + (u * Mathf.Cos(a) + w * Mathf.Sin(a)) * r * 0.85f); }
+        geo.Add(top + normal * r * 0.3f);
+        for (int i = 0; i < sides; i++)
+        {
+            int j = (i + 1) % sides;
+            int b0 = i * 2, t0 = i * 2 + 1, b1 = j * 2, t1 = j * 2 + 1;
+            Quad(tris, geo, b0, t0, t1, b1, (geo[b0] + geo[t1]) * 0.5f - (bottom + top) * 0.5f);
+            int e0 = sides * 2 + i, e1 = sides * 2 + j;
+            Tri(tris, geo, e0, e1, tip - first, normal);
+        }
+        foreach (int t in tris) outTris.Add(first + t);
+        return outV.Count - first;
+    }
+
+    static void Tri(List<int> tris, List<Vector3> geo, int a, int b, int c, Vector3 facing)
+    {
+        bool flip = Vector3.Dot(Vector3.Cross(geo[b] - geo[a], geo[c] - geo[a]), facing) < 0f;
+        tris.Add(a); tris.Add(flip ? c : b); tris.Add(flip ? b : c);
+    }
+
+    static void Quad(List<int> tris, List<Vector3> geo, int a, int b, int c, int d, Vector3 facing)
+    {
+        Tri(tris, geo, a, b, c, facing);
+        Tri(tris, geo, a, c, d, facing);
     }
 
     /// <summary>

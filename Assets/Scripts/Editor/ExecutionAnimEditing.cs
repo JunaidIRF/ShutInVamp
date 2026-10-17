@@ -319,12 +319,12 @@ public static class ExecutionAnimEditing
 
     const string CutMeshTag = " (cut preview)";
     const string CutMarkerName = "Cut preview";
-    const string WoundName = "Wound";
+    const string PreviewMaterialTag = "Cut preview ";
     static string cutKey = "";
     static double nextCutCheck;
     static readonly System.Collections.Generic.List<(SkinnedMeshRenderer smr, Mesh mesh, Material[] materials)> cutOriginals = new System.Collections.Generic.List<(SkinnedMeshRenderer, Mesh, Material[])>();
     static readonly System.Collections.Generic.List<(GameObject marker, string label)> cutMarkers = new System.Collections.Generic.List<(GameObject, string)>();
-    static Material previewWound;
+    static Dismemberment.CutLook previewLook;
     static GUIStyle cutLabelStyle;
 
     static void PreviewCuts()
@@ -380,6 +380,12 @@ public static class ExecutionAnimEditing
             d.parts = source.parts.Select(p => new Dismemberment.Part { part = p.part, bone = p.bone, mass = p.mass, claw = p.claw }).ToList();
             d.woundColor = source.woundColor;
             d.woundDepth = source.woundDepth;
+            d.boneColor = source.boneColor;
+            d.boneSize = source.boneSize;
+            d.boneLength = source.boneLength;
+            d.bloodColor = source.bloodColor;
+            d.stainAround = source.stainAround;
+            d.stainDrip = source.stainDrip;
         }
 
         // in time order, like the game; a part inside one already cut off is gone with it (the game skips it too)
@@ -397,9 +403,8 @@ public static class ExecutionAnimEditing
 
         var renderers = enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true).Where(r => r.sharedMesh != null && r.enabled && !r.name.Contains("HitFlash")).ToArray();
         if (renderers.Length == 0) return;
-        previewWound = Dismemberment.MakeWoundMaterial(renderers[0].sharedMaterial, d.woundColor);
-        previewWound.name = WoundName;
-        previewWound.hideFlags = HideFlags.HideAndDontSave;
+        previewLook = d.MakeLook(renderers[0].sharedMaterial);
+        foreach (var m in new[] { previewLook.wound, previewLook.bone, previewLook.blood }) { m.name = PreviewMaterialTag + m.name; m.hideFlags = HideFlags.HideAndDontSave; }
 
         var centres = new System.Collections.Generic.List<(int cut, SkinnedMeshRenderer smr, int vertex)>();
         foreach (var smr in renderers)
@@ -411,7 +416,7 @@ public static class ExecutionAnimEditing
             Material[] mats = originalMats;
             for (int i = 0; i < found.Count; i++)
             {
-                var r = Dismemberment.CutMesh(smr, mesh, mats, previewWound, found[i].bone, null, null, d.woundDepth);
+                var r = Dismemberment.CutMesh(smr, mesh, mats, previewLook, found[i].bone, null, null);
                 if (r == null) continue;
                 if (mesh != original) Object.DestroyImmediate(mesh);
                 mesh = r.body;
@@ -462,8 +467,10 @@ public static class ExecutionAnimEditing
         cutOriginals.Clear();
         foreach (var (marker, _) in cutMarkers) if (marker != null) Object.DestroyImmediate(marker);
         cutMarkers.Clear();
-        if (previewWound != null) Object.DestroyImmediate(previewWound);
-        previewWound = null;
+        if (previewLook != null)
+            foreach (var m in new[] { previewLook.wound, previewLook.bone, previewLook.blood })
+                if (m != null) Object.DestroyImmediate(m);
+        previewLook = null;
         cutKey = "";
 
         // after a script reload the lists above are empty: find leftovers in the stage itself
@@ -496,7 +503,7 @@ public static class ExecutionAnimEditing
             Object.DestroyImmediate(t.gameObject);
         }
         if (leftovers)
-            foreach (var m in Resources.FindObjectsOfTypeAll<Material>().Where(m => m.name == WoundName && m.hideFlags == HideFlags.HideAndDontSave).ToArray())
+            foreach (var m in Resources.FindObjectsOfTypeAll<Material>().Where(m => m.name.StartsWith(PreviewMaterialTag) && m.hideFlags == HideFlags.HideAndDontSave).ToArray())
                 Object.DestroyImmediate(m);
     }
 
