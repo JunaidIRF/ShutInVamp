@@ -159,6 +159,11 @@ public class GuardJuice : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
     //  SHAKE
     // ══════════════════════════════════════════════════════════════════
+    float sustainedShake;   // degrees, set every frame by whoever wants a constant rumble (falling, sliding)
+
+    /// <summary>A constant gentle rumble (degrees) until set back to 0; impulse shakes still win when stronger.</summary>
+    public void SetSustainedShake(float amount) => sustainedShake = Mathf.Max(0f, amount);
+
     public void Shake(float amount, float duration)
     {
         // a stronger shake overrides a weaker one still playing
@@ -175,14 +180,19 @@ public class GuardJuice : MonoBehaviour
         if (shakeTarget == null) return;
 
         float left = shakeEndTime - Time.unscaledTime;
-        if (left <= 0f)
+        float impulse = 0f;
+        if (left > 0f)
+        {
+            float fade = left / shakeDuration;
+            impulse = shakeAmount * fade * fade;
+        }
+        float strength = Mathf.Max(impulse, sustainedShake);
+        if (strength <= 0f)
         {
             shakeTarget.localRotation = shakeBaseRotation;
             return;
         }
 
-        float fade = left / shakeDuration;
-        float strength = shakeAmount * fade * fade;
         float t = Time.unscaledTime * shakeFrequency;
         Vector3 offset = new Vector3(
             (Mathf.PerlinNoise(shakeSeed, t) - 0.5f) * 2f,

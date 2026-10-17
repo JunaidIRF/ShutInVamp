@@ -8522,6 +8522,21 @@ MonoBehaviour:
   fovSpeedMultiplier: 1
   maxFov: 130
   fovSmoothSpeed: 8
+  juice: {fileID: 5879824131008612246}
+  fallShakeStartSpeed: 6
+  fallShakeFullSpeed: 20
+  fallShakeMax: 0.3
+  enableSlide: 1
+  slideMinSpeed: 6
+  slideBoost: 2
+  slideMaxSpeed: 12
+  slideFriction: 7
+  slideEndSpeed: 3
+  slideMaxTime: 1.2
+  slideSteer: 1.2
+  slideCooldown: 0.5
+  slideShake: 0.12
+  handsAnim: {fileID: 2954540343418349149}
   knockbackDrag: 10
   velocity: {x: 0, y: 0, z: 0}
   isGrounded: 0

@@ -82,6 +82,26 @@ public class PlayerMovement : MonoBehaviour
     public float fovSmoothSpeed = 8f;       // How fast FOV transitions
 
     // ─── Runtime state (read-only from outside) ────────────────────────
+    [Header("Fall shake")]
+    public GuardJuice juice;                // camera shake (found on this object if empty)
+    public float fallShakeStartSpeed = 6f;  // falling faster than this starts a very slight shake
+    public float fallShakeFullSpeed = 20f;
+    public float fallShakeMax = 0.3f;       // degrees at full speed
+
+    [Header("Slide")]
+    // sprint + crouch (press) on the ground: a quick slide that slows down by friction
+    public bool enableSlide = true;
+    public float slideMinSpeed = 6f;        // need to be going about this fast (sprinting)
+    public float slideBoost = 2f;           // m/s added when the slide starts
+    public float slideMaxSpeed = 12f;
+    public float slideFriction = 7f;        // m/s² it slows down by
+    public float slideEndSpeed = 3f;        // ends below this
+    public float slideMaxTime = 1.2f;
+    public float slideSteer = 1.2f;         // rad/s it can be steered with the movement keys
+    public float slideCooldown = 0.5f;
+    public float slideShake = 0.12f;        // degrees of rumble while sliding
+    public Animator handsAnim;              // Camera Head animator ("Sliding" bool); found if empty
+
     [Header("Knockback")]
     public float knockbackDrag = 10f;       // m/s² it slows down by (10 m/s -> ~5 m)
 
@@ -99,6 +119,13 @@ public class PlayerMovement : MonoBehaviour
     float targetHeight;
     bool movementEnabled = true;
     bool lookEnabled = true;
+
+    // slide
+    bool isSliding;
+    Vector3 slideDir;
+    float slideSpeed, slideTime, nextSlideTime;
+    bool hasSlidingParam;
+    public bool IsSliding => isSliding;
 
     Vector3 knockVelocity;      // from Knockback(), decays by knockbackDrag
 
@@ -135,6 +162,13 @@ public class PlayerMovement : MonoBehaviour
             graphicsOriginalY = graphics.localPosition.y;
 
         knockVelocity = Vector3.zero;
+
+        if (juice == null) juice = GetComponent<GuardJuice>();
+        if (handsAnim == null && cameraHead != null) handsAnim = cameraHead.GetComponent<Animator>();
+        hasSlidingParam = handsAnim != null && System.Array.Exists(handsAnim.parameters, p => p.name == "Sliding");
+        isSliding = false;
+        nextSlideTime = 0f;
+        SetSlidingAnim(false);
     }
 
     void Update()
@@ -153,10 +187,13 @@ public class PlayerMovement : MonoBehaviour
 
         if (movementEnabled)
         {
-            HandleMovement();
+            UpdateSlide();
+            if (isSliding) HandleSlideMovement();
+            else HandleMovement();
             HandleCrouch();
             HandleJump();
         }
+        else if (isSliding) EndSlide();
 
         ApplyGravity();
         // knockback rides on top of the walk velocity (which HandleMovement rewrites every frame)
@@ -166,6 +203,7 @@ public class PlayerMovement : MonoBehaviour
             HandleHeadBob();
 
         HandleDynamicFov();
+        UpdateMoveShake();
 
         wasGroundedLastFrame = isGrounded;
     }
@@ -303,7 +341,7 @@ public class PlayerMovement : MonoBehaviour
     // ══════════════════════════════════════════════════════════════════
     void HandleCrouch()
     {
-        bool wantsCrouch = Input.GetKey(crouchKey);
+        bool wantsCrouch = Input.GetKey(crouchKey) || isSliding;
 
         if (wantsCrouch && !isCrouching)
         {
@@ -368,6 +406,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 velocity.y = jumpForce;
                 lastGroundedTime = -1f; // consume coyote time
+                if (isSliding) EndSlide();   // slide-jump: keeps the slide's speed into the air
 
                 if (playParticlesOnJump)
                     PlayJumpLandParticles();
@@ -414,7 +453,7 @@ public class PlayerMovement : MonoBehaviour
         if (bobTarget == null) return;
 
         float speed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
-        bool isMoving = speed > 0.2f && isGrounded;
+        bool isMoving = speed > 0.2f && isGrounded && !isSliding;
 
         if (isMoving)
         {
@@ -450,7 +489,7 @@ public class PlayerMovement : MonoBehaviour
         if (enableDynamicFov)
         {
             bool shouldApplyFov = (!isGrounded && applyFovWhenInAir) || 
-                                  (isGrounded && isSprinting && applyFovWhenRunning) ||
+                                  (isGrounded && (isSprinting || isSliding) && applyFovWhenRunning) ||
                                   (isGrounded && !isSprinting && applyFovWhenWalking);
 
             if (shouldApplyFov)
@@ -510,6 +549,7 @@ public class PlayerMovement : MonoBehaviour
     {
         velocity = Vector3.zero;
         knockVelocity = Vector3.zero;
+        if (isSliding) EndSlide();
         controller.enabled = false;
         transform.position = position;
         controller.enabled = true;
@@ -530,6 +570,69 @@ public class PlayerMovement : MonoBehaviour
         xRotation = Mathf.Clamp(xRotation, -maxLookAngle, maxLookAngle);
         if (cameraHead != null)
             cameraHead.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  SLIDE
+    // ══════════════════════════════════════════════════════════════════
+    void UpdateSlide()
+    {
+        Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
+        if (!isSliding)
+        {
+            if (enableSlide && isGrounded && Input.GetKeyDown(crouchKey) && flat.magnitude >= slideMinSpeed && Time.time >= nextSlideTime)
+                StartSlide(flat);
+            return;
+        }
+
+        slideTime += Time.deltaTime;
+        if (!isGrounded) { EndSlide(); return; }   // off a ledge: normal air control takes the momentum
+        if (!Input.GetKey(crouchKey) || slideSpeed <= slideEndSpeed || slideTime >= slideMaxTime) EndSlide();
+    }
+
+    void StartSlide(Vector3 flatVelocity)
+    {
+        isSliding = true;
+        slideDir = flatVelocity.normalized;
+        slideSpeed = Mathf.Min(flatVelocity.magnitude + slideBoost, slideMaxSpeed);
+        slideTime = 0f;
+        isCrouching = true;
+        targetHeight = crouchHeight;
+        SetSlidingAnim(true);
+    }
+
+    void EndSlide()
+    {
+        isSliding = false;
+        nextSlideTime = Time.time + slideCooldown;
+        SetSlidingAnim(false);
+    }
+
+    void HandleSlideMovement()
+    {
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+        Vector3 wish = transform.right * h + transform.forward * v;
+        if (wish.sqrMagnitude > 0.01f)
+            slideDir = Vector3.RotateTowards(slideDir, wish.normalized, slideSteer * Time.deltaTime, 0f);
+        slideSpeed = Mathf.MoveTowards(slideSpeed, 0f, slideFriction * Time.deltaTime);
+        velocity.x = slideDir.x * slideSpeed;
+        velocity.z = slideDir.z * slideSpeed;
+    }
+
+    void SetSlidingAnim(bool on)
+    {
+        if (hasSlidingParam) handsAnim.SetBool("Sliding", on);
+    }
+
+    /// <summary>Very slight camera rumble: grows with fall speed, and a touch while sliding.</summary>
+    void UpdateMoveShake()
+    {
+        if (juice == null) return;
+        float fall = isGrounded ? 0f : -velocity.y;
+        float amount = Mathf.InverseLerp(fallShakeStartSpeed, fallShakeFullSpeed, fall) * fallShakeMax;
+        if (isSliding) amount = Mathf.Max(amount, slideShake * Mathf.Clamp01(slideSpeed / Mathf.Max(slideMinSpeed, 0.01f)));
+        juice.SetSustainedShake(amount);
     }
 
     /// <summary>This frame's knockback movement, integrated exactly so the slide is the same length at any frame rate.</summary>
