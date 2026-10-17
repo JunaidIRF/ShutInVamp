@@ -337,6 +337,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1398834310539170960, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
     - target: {fileID: 1779437275866777846, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
@@ -393,6 +397,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player
       objectReference: {fileID: 0}
+    - target: {fileID: 5569499990235534989, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
     - target: {fileID: 5794157458762835431, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: guardKey
       value: 118
@@ -400,6 +408,14 @@ PrefabInstance:
     - target: {fileID: 6082890605949502124, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_Enabled
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6215989748502717107, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
+    - target: {fileID: 7148580498072035608, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
       objectReference: {fileID: 0}
     - target: {fileID: 8013984872172221370, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
