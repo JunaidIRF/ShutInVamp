@@ -30,12 +30,12 @@ Material:
     m_Ints: []
     m_Floats:
     - _Coverage: 0.28
-    - _Opacity: 0.5
+    - _Opacity: 0.25
     - _Rate: 9
     - _ReachMax: 0.85
     - _ReachMin: 0.55
     - _Slots: 32
-    - _Width: 0.018
+    - _Width: 0.01
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []

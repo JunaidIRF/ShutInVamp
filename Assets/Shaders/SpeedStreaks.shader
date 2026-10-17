@@ -7,10 +7,10 @@ Shader "ShutInVamp/UI/SpeedStreaks"
     {
         [PerRendererData] _MainTex ("Texture", 2D) = "white" {}
         _Color ("Line Colour", Color) = (1, 1, 1, 1)
-        _Opacity ("Opacity", Range(0, 1)) = 0.5
+        _Opacity ("Opacity", Range(0, 1)) = 0.25
         _Slots ("Line Slots Around", Float) = 32
         _Coverage ("Share Of Slots With A Line", Range(0, 1)) = 0.28
-        _Width ("Half Width At The Edge (screen half-heights)", Range(0, 0.1)) = 0.018
+        _Width ("Half Width At The Edge (screen half-heights)", Range(0, 0.1)) = 0.01
         _ReachMin ("Tip Start Min (fraction of the way to the edge)", Range(0, 1)) = 0.55
         _ReachMax ("Tip Start Max", Range(0, 1)) = 0.85
         _Rate ("Re-deal Rate", Float) = 9
