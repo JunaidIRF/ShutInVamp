@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class Shooter : MonoBehaviour
 {
@@ -39,6 +40,18 @@ public class Shooter : MonoBehaviour
     public GameObject bloodFx;          // spawned at the impact point, spraying back towards the shot
     public float bloodFxLifetime = 9f;  // hard cleanup: drops fly up to 5 s, then sit on the floor up to 3.5 s
     public float bloodFxOffset = 0.15f; // start just outside our collider, or the drops collide with it and die at once
+
+    [Header("Movement")]
+    // keeps about preferredDistance from the player on the NavMesh: walks in when too far (or can't
+    // see them), backs off when they come too close (kick range is handled by the kick)
+    public NavMeshAgent agent;          // on this root (baseOffset = half the capsule height)
+    public float preferredDistance = 10f;
+    public float tooFar = 12.5f;
+    public float tooClose = 7f;
+    public float moveSpeed = 3.5f;
+    public float retreatSpeed = 2.5f;
+    public float repathInterval = 0.25f;
+    public float legsBlendSpeed = 6f;   // how fast the walk layer fades in/out
 
     [Header("Kick")]
     // when the player gets close (and we're not stunned) we kick them away
@@ -102,6 +115,14 @@ public class Shooter : MonoBehaviour
     static readonly int StunnedHash = Animator.StringToHash("Stunned");
     static readonly int KickHash = Animator.StringToHash("Kick");
     static readonly int KickSpeedHash = Animator.StringToHash("KickSpeed");
+    static readonly int MoveSpeedHash = Animator.StringToHash("MoveSpeed");
+
+    enum MoveMode { Hold, Approach, Retreat }
+    MoveMode moveMode;
+    float nextRepath;
+    bool hasSight;
+    int legsLayer = -1;
+    float legsWeight;
 
     /// <summary>Where reflected bullets aim — the middle of our capsule.</summary>
     public Vector3 AimPoint => ownCollider != null ? ownCollider.bounds.center : transform.position;
@@ -126,8 +147,23 @@ public class Shooter : MonoBehaviour
         if (anim == null) anim = GetComponentInChildren<Animator>();
         if (anim != null) anim.SetBool(StunnedHash, false);
         if (ragdoll == null) ragdoll = GetComponentInChildren<Ragdoll>();
+        if (agent == null) agent = GetComponent<NavMeshAgent>();
         isDead = false;
         isExecuted = false;
+
+        // movement: start on the NavMesh, standing still
+        moveMode = MoveMode.Hold;
+        nextRepath = 0f;
+        hasSight = false;
+        legsWeight = 0f;
+        legsLayer = anim != null ? anim.GetLayerIndex("Legs") : -1;
+        if (legsLayer >= 0) anim.SetLayerWeight(legsLayer, 0f);
+        if (agent != null)
+        {
+            agent.enabled = true;
+            agent.updateRotation = false;   // we face the player ourselves
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit onMesh, 3f, NavMesh.AllAreas)) agent.Warp(onMesh.position);
+        }
 
         if (graphics != null)
         {
@@ -164,7 +200,7 @@ public class Shooter : MonoBehaviour
 
         if (isStaggered)
         {
-            if (Time.time < staggerEndTime) return;
+            if (Time.time < staggerEndTime) { UpdateWalkAnim(); return; }
 
             isStaggered = false;
             if (anim != null) anim.SetBool(StunnedHash, false);
@@ -176,6 +212,8 @@ public class Shooter : MonoBehaviour
         if (PlayerExecution.IsExecuting)
         {
             if (kickImpactTime >= 0f) EndKick();
+            StopMoving();
+            UpdateWalkAnim();
             releaseTime = -1f;
             if (anim != null) { anim.ResetTrigger(ThrowHash); anim.ResetTrigger(KickHash); }
             nextFireTime = Mathf.Max(nextFireTime, Time.time + Random.Range(0.6f, 1.2f));   // staggered restart
@@ -183,11 +221,15 @@ public class Shooter : MonoBehaviour
             return;
         }
 
+        if (kickImpactTime < 0f) UpdateMovement();   // keep our distance (also while throwing)
+
         if (kickImpactTime >= 0f)
         {
-            // lunge in over the wind-up
+            // lunge in over the wind-up, along the NavMesh (so never through a wall)
             float k = 1f - Mathf.Clamp01(KickTimeToImpact / Mathf.Max(kickWindup, 0.0001f));
-            transform.position = Vector3.Lerp(lungeFrom, lungeTo, Mathf.SmoothStep(0f, 1f, k));
+            Vector3 want = Vector3.Lerp(lungeFrom, lungeTo, Mathf.SmoothStep(0f, 1f, k));
+            if (AgentReady) agent.Move(new Vector3(want.x - transform.position.x, 0f, want.z - transform.position.z));
+            else transform.position = want;
 
             if (Time.time >= kickImpactTime)
             {
@@ -213,7 +255,7 @@ public class Shooter : MonoBehaviour
             return;
         }
 
-        if (Time.time >= nextFireTime)
+        if (Time.time >= nextFireTime && hasSight)   // no stakes into walls
         {
             // wind up first; the stake leaves the hand at the release frame
             if (anim != null) anim.SetTrigger(ThrowHash);
@@ -234,17 +276,120 @@ public class Shooter : MonoBehaviour
         nextKickTime = Time.time + kickCooldown;
         if (!Kicking.Contains(this)) Kicking.Add(this);
 
-        // lunge to kickLungeTo from the player, but not through walls (the player and we don't count)
+        // the kick animates the legs: stop walking and drop the walk layer straight away
+        StopMoving();
+        SetLegsWeight(0f);
+
+        // lunge to kickLungeTo from the player (moved along the NavMesh, so walls stop it)
         Vector3 to = target.position - transform.position;
         to.y = 0f;
         float lunge = Mathf.Clamp(to.magnitude - kickLungeTo, 0f, kickLungeMax);
         Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : transform.forward;
-        Vector3 chest = ownCollider != null ? ownCollider.bounds.center : transform.position + Vector3.up;
-        int mask = ~((1 << gameObject.layer) | (1 << target.gameObject.layer));
-        if (lunge > 0f && Physics.SphereCast(chest, 0.3f, dir, out RaycastHit hit, lunge + 0.5f, mask, QueryTriggerInteraction.Ignore))
-            lunge = Mathf.Max(0f, hit.distance - 0.5f);
         lungeFrom = transform.position;
         lungeTo = transform.position + dir * lunge;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  MOVEMENT — keep our distance on the NavMesh
+    // ══════════════════════════════════════════════════════════════════
+
+    bool AgentReady => agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh;
+
+    void UpdateMovement()
+    {
+        hasSight = CanSeeTarget();
+        if (!AgentReady) { UpdateWalkAnim(); return; }
+
+        Vector3 to = target.position - transform.position;
+        to.y = 0f;
+        float dist = to.magnitude;
+
+        // decide (with hysteresis so it doesn't twitch at the edges)
+        if (dist > tooFar || !hasSight) moveMode = MoveMode.Approach;
+        else if (dist < tooClose && dist > kickRange) moveMode = MoveMode.Retreat;
+        if (moveMode == MoveMode.Approach && hasSight && dist <= preferredDistance) moveMode = MoveMode.Hold;
+        if (moveMode == MoveMode.Retreat && (dist >= preferredDistance - 1f || dist <= kickRange)) moveMode = MoveMode.Hold;
+
+        if (Time.time >= nextRepath)
+        {
+            nextRepath = Time.time + repathInterval;
+            switch (moveMode)
+            {
+                case MoveMode.Approach:
+                    agent.speed = moveSpeed;
+                    agent.isStopped = false;
+                    agent.SetDestination(target.position);
+                    break;
+                case MoveMode.Retreat:
+                    agent.speed = retreatSpeed;
+                    if (FindRetreatPoint(dist > 0.001f ? to / dist : transform.forward, preferredDistance - dist, out Vector3 point))
+                    {
+                        agent.isStopped = false;
+                        agent.SetDestination(point);
+                    }
+                    else { StopMoving(); moveMode = MoveMode.Hold; }   // cornered: stand and fight
+                    break;
+                default:
+                    StopMoving();
+                    break;
+            }
+        }
+        UpdateWalkAnim();
+    }
+
+    /// <summary>A reachable spot about <paramref name="amount"/> m away from the player: straight back, else diagonally.</summary>
+    bool FindRetreatPoint(Vector3 toPlayer, float amount, out Vector3 point)
+    {
+        Vector3 back = -toPlayer;
+        foreach (float angle in new[] { 0f, 35f, -35f, 70f, -70f })
+        {
+            Vector3 want = transform.position + Quaternion.Euler(0f, angle, 0f) * back * (Mathf.Max(amount, 1f) + 0.5f);
+            if (NavMesh.SamplePosition(want, out NavMeshHit hit, 1f, NavMesh.AllAreas) &&
+                !NavMesh.Raycast(agent.nextPosition, hit.position, out _, NavMesh.AllAreas))
+            {
+                point = hit.position;
+                return true;
+            }
+        }
+        point = transform.position;
+        return false;
+    }
+
+    /// <summary>Nothing (but the player) between our chest and theirs.</summary>
+    bool CanSeeTarget()
+    {
+        Vector3 from = ownCollider != null ? ownCollider.bounds.center : transform.position;
+        Vector3 to = targetCollider != null ? targetCollider.bounds.center : target.position;
+        if (!Physics.Linecast(from, to, out RaycastHit hit, ~(1 << gameObject.layer), QueryTriggerInteraction.Ignore)) return true;
+        return hit.collider.transform.IsChildOf(target);
+    }
+
+    void StopMoving()
+    {
+        if (AgentReady)
+        {
+            agent.ResetPath();
+            agent.velocity = Vector3.zero;
+        }
+    }
+
+    /// <summary>Walk layer follows how fast we actually move (forward / backward relative to where we face).</summary>
+    void UpdateWalkAnim()
+    {
+        if (anim == null || legsLayer < 0) return;
+        Vector3 v = AgentReady ? agent.velocity : Vector3.zero;
+        v.y = 0f;
+        float along = Vector3.Dot(v, transform.forward);
+        anim.SetFloat(MoveSpeedHash, Mathf.Clamp(along / Mathf.Max(moveSpeed, 0.01f) * 2f, -1f, 1f));
+        float want = Mathf.Clamp01(v.magnitude / 1f);   // fully walking from 1 m/s
+        legsWeight = Mathf.MoveTowards(legsWeight, want, legsBlendSpeed * Time.deltaTime);
+        anim.SetLayerWeight(legsLayer, legsWeight);
+    }
+
+    void SetLegsWeight(float w)
+    {
+        legsWeight = w;
+        if (anim != null && legsLayer >= 0) anim.SetLayerWeight(legsLayer, w);
     }
 
     /// <summary>The kick is over (landed, or cancelled by a stun / execution / death).</summary>
@@ -344,6 +489,7 @@ public class Shooter : MonoBehaviour
     {
         isStaggered = true;
         staggerEndTime = Time.time + time;
+        StopMoving();
         bounceStartTime = Time.time;
         bouncing = true;
         releaseTime = -1f;                 // a hit cancels a throw that hasn't let go yet
@@ -378,6 +524,8 @@ public class Shooter : MonoBehaviour
         isStaggered = false;
         releaseTime = -1f;
         EndKick();
+        StopMoving();
+        SetLegsWeight(0f);   // the execution clip owns the legs
         bouncing = false;
         if (ownCollider != null) ownCollider.enabled = false;   // the player stands closer than our capsule allows
         if (graphics != null)
@@ -421,6 +569,9 @@ public class Shooter : MonoBehaviour
         isStaggered = false;
         releaseTime = -1f;
         EndKick();
+        StopMoving();
+        if (agent != null) agent.enabled = false;   // the ragdoll moves on its own now
+        SetLegsWeight(0f);
 
         // physics must see the real, unsquashed model
         bouncing = false;
