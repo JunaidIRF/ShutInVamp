@@ -1,14 +1,16 @@
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.Rendering;
 
 /// <summary>
-/// Subtle wind streaks at the screen edges when moving fast: strongest while sliding, building up when
-/// falling fast, faint at full sprint. Drives the alpha of a full-screen Image using the SpeedStreaks shader.
+/// Subtle speed feel: fades in a post-process volume (slight lens stretch, a touch of edge fringing and a
+/// soft vignette — Assets/Settings/SpeedFeedback.asset) when moving fast: strongest while sliding,
+/// building up when falling fast, faint at full sprint. Lower priority than the hurt / parry / burn
+/// volumes, so those win while they play.
 /// </summary>
 public class SpeedOverlay : MonoBehaviour
 {
     public PlayerMovement movement;
-    public Image overlay;                   // ScreenFX/SpeedOverlay
+    public Volume volume;                   // SpeedVolume (global, weight driven here)
 
     [Header("How strong")]
     public float slideStrength = 1f;        // at slide start speed (scales with the slide's speed)
@@ -39,7 +41,7 @@ public class SpeedOverlay : MonoBehaviour
 
     void Update()
     {
-        if (movement == null || overlay == null) return;
+        if (movement == null || volume == null) return;
         Vector3 v = movement.velocity;
         float flat = new Vector3(v.x, 0f, v.z).magnitude;
 
@@ -56,9 +58,6 @@ public class SpeedOverlay : MonoBehaviour
 
     void Apply()
     {
-        if (overlay == null) return;
-        Color c = overlay.color;
-        c.a = strength;
-        overlay.color = c;
+        if (volume != null) volume.weight = strength;
     }
 }
