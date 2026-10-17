@@ -285,8 +285,8 @@ public static class ExecutionAnimEditing
     /// <summary>Same rule as the game: the last event at or before <paramref name="t"/> with a Hands setting wins.</summary>
     static bool HandsWorldAt(ExecutionData data, float t)
     {
-        bool world = false;
-        if (data.events == null) return false;
+        bool world = data.worldHandsAtStart;
+        if (data.events == null) return world;
         foreach (var e in data.events.OrderBy(e => e.time))
         {
             if (e.time > t + 0.0001f) break;

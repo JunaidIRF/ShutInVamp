@@ -116,6 +116,7 @@ public class PlayerExecution : MonoBehaviour
         SetPrompt(false);
         movement.SetPlayerControlsEnabled(false);
         victim.BeginExecution();
+        if (data.worldHandsAtStart) SetHandsWorld();
 
         Animator victimAnim = victim.anim;
         Transform bone = FindDeep(victimAnim.transform, data.focusBone);

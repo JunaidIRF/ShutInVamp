@@ -45,6 +45,10 @@ public class ExecutionData : ScriptableObject
     [Tooltip("Bone on the victim the camera looks at and where blood comes from")]
     public string focusBone = "mixamorig:LeftShoulder";
 
+    [Header("Hands")]
+    [Tooltip("On: the hands start on the world layer (the victim's body can cover them) for the whole execution, without an event. Events with Hands set can still switch them. Always back to the overlay at the end.")]
+    public bool worldHandsAtStart;
+
     [Header("Timing")]
     [Tooltip("When the victim dies and drops into its ragdoll")]
     public float killTime = 1.3f;
