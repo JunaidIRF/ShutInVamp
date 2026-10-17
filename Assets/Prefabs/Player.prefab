@@ -8664,8 +8664,8 @@ MonoBehaviour:
   hitFlashColor: {r: 1, g: 0.15, b: 0.1, a: 1}
   lockedColor: {r: 1, g: 1, b: 1, a: 0.25}
   flashTime: 0.25
-  guardTilt: 3
-  guardRoll: 2
+  guardTilt: 1.75
+  guardRoll: 1.2
   leanSpeed: 10
   popScale: 0.28
   popTime: 0.2

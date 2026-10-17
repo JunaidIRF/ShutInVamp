@@ -51,8 +51,8 @@ public class PlayerBlock : MonoBehaviour
 
     [Header("Guard lean")]
     // while guarding, the view leans a little towards the guard: up = look up, right = turn + roll right
-    public float guardTilt = 3f;            // degrees of pitch / yaw at full guard
-    public float guardRoll = 2f;            // degrees of roll for a side guard
+    public float guardTilt = 1.75f;         // degrees of pitch / yaw at full guard
+    public float guardRoll = 1.2f;          // degrees of roll for a side guard
     public float leanSpeed = 10f;           // how fast it eases in / out
     public float popScale = 0.28f;          // the guard arc pops this much bigger on a block / parry / hit
     public float popTime = 0.2f;
