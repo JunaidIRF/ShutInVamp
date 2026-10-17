@@ -28,7 +28,13 @@ public class PlayerExecution : MonoBehaviour
     public float range = 1.6f;              // flat distance to the enemy
     public float maxAngle = 55f;            // enemy must be this close to where we look
 
+    [Header("Hands layer")]
+    public Transform[] hands;               // RHand / LHand (found under the animator if empty)
+    public int worldHandsLayer = 0;         // "World" events put the hands here (Default: drawn by the main camera)
+
     Shooter candidate;
+    // every object under the hands with its own layer (hands sit on the overlay layer, so does their fire)
+    readonly System.Collections.Generic.List<(GameObject go, int layer)> handLayers = new System.Collections.Generic.List<(GameObject, int)>();
 
     void Start()
     {
@@ -40,6 +46,7 @@ public class PlayerExecution : MonoBehaviour
     void OnDisable()
     {
         StopAllCoroutines();
+        RestoreHands();
         if (IsExecuting && movement != null) movement.SetPlayerControlsEnabled(true);
         IsExecuting = false;
         SetPrompt(false);
@@ -154,6 +161,7 @@ public class PlayerExecution : MonoBehaviour
         if (!killed) victim.FinishExecution(bone.position, BiteDirection(bone));
 
         // the player state blends back to Idle on its own (exit-time transition)
+        RestoreHands();
         IsExecuting = false;
         movement.SetPlayerControlsEnabled(true);
     }
@@ -163,6 +171,33 @@ public class PlayerExecution : MonoBehaviour
         if (e.blood) victim.Bleed(bone.position, BiteDirection(bone));
         if (e.shake > 0f && juice != null) juice.Shake(e.shake, e.shakeTime);
         if (e.heal > 0f && player != null) player.Heal(e.heal);
+        if (e.hands == ExecutionData.HandsLayer.World) SetHandsWorld();
+        else if (e.hands == ExecutionData.HandsLayer.Overlay) RestoreHands();
+    }
+
+    /// <summary>Hands (and their fire) onto the normal scene layer, so the victim's body can cover them.</summary>
+    void SetHandsWorld()
+    {
+        if (handLayers.Count == 0)
+        {
+            if ((hands == null || hands.Length == 0) && anim != null)
+                hands = new[] { anim.transform.Find("RHand"), anim.transform.Find("LHand") };
+            if (hands == null) return;
+            foreach (Transform h in hands)
+                if (h != null)
+                    foreach (Transform t in h.GetComponentsInChildren<Transform>(true))
+                        handLayers.Add((t.gameObject, t.gameObject.layer));
+        }
+        foreach (var (go, _) in handLayers)
+            if (go != null) go.layer = worldHandsLayer;
+    }
+
+    /// <summary>Hands back on the layers they had (the overlay). Safe to call any time.</summary>
+    void RestoreHands()
+    {
+        foreach (var (go, layer) in handLayers)
+            if (go != null) go.layer = layer;
+        handLayers.Clear();
     }
 
     Vector3 BiteDirection(Transform bone) => (bone.position - cam.position).normalized;

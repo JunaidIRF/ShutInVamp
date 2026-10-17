@@ -276,13 +276,7 @@ public static class ExecutionAnimEditing
         var times = markers.Where(m => m != kill).Select(m => m.time).ToArray();
         Undo.RecordObject(data, "Execution timing");
         if (kill != null) data.killTime = kill.time;
-        var old = data.events ?? new ExecutionData.Event[0];
-        data.events = times.Select((t, i) =>
-        {
-            var e = i < old.Length ? old[i] : new ExecutionData.Event { blood = true, shake = 0.8f, shakeTime = 0.15f };
-            e.time = t;
-            return e;
-        }).ToArray();
+        data.events = MatchEvents(data.events ?? new ExecutionData.Event[0], times);
         data.duration = edit.length;
         EditorUtility.SetDirty(data);
 
@@ -291,6 +285,31 @@ public static class ExecutionAnimEditing
         AssetDatabase.SaveAssetIfDirty(data);
         if (dropped.Count > 0)
             Debug.LogWarning($"Execution '{data.stateName}': not copied to the game clips (only Player/{string.Join(", Player/", PlayerParts)} and the enemy's bones are used): {string.Join(", ", dropped.Distinct())}");
+    }
+
+    /// <summary>
+    /// Keep each marker's settings (blood, heal, hands...) when markers are added, removed or dragged:
+    /// a marker still at an event's time keeps that event; the rest pair up in time order (a dragged
+    /// marker keeps its own); extra markers start as empty events to fill in on the asset.
+    /// </summary>
+    static ExecutionData.Event[] MatchEvents(ExecutionData.Event[] old, float[] times)
+    {
+        var result = new ExecutionData.Event[times.Length];
+        var taken = new bool[old.Length];
+        var matched = new bool[times.Length];
+        for (int i = 0; i < times.Length; i++)
+            for (int j = 0; j < old.Length; j++)
+                if (!taken[j] && Mathf.Abs(old[j].time - times[i]) < 0.0005f) { result[i] = old[j]; taken[j] = matched[i] = true; break; }
+
+        var leftover = Enumerable.Range(0, old.Length).Where(j => !taken[j]).OrderBy(j => old[j].time).ToList();
+        for (int i = 0; i < times.Length; i++)
+        {
+            if (matched[i]) continue;
+            if (leftover.Count > 0) { result[i] = old[leftover[0]]; leftover.RemoveAt(0); }
+            else result[i] = new ExecutionData.Event();
+        }
+        for (int i = 0; i < times.Length; i++) result[i].time = times[i];
+        return result;
     }
 
     static void Fill(AnimationClip clip, System.Collections.Generic.List<(EditorCurveBinding b, AnimationCurve c)> curves, float frameRate)
@@ -425,7 +444,7 @@ public class ExecutionDataEditor : Editor
             ExecutionAnimEditing.Open(data);
         if (editing)
         {
-            EditorGUILayout.HelpBox("Editing in ExecutionStage: select 'Execution Rig' in the Animation window. Changes copy to the game clips automatically. Markers: 'Kill' = kill time, others = events (in order).", MessageType.Info);
+            EditorGUILayout.HelpBox("Editing in ExecutionStage: select 'Execution Rig' in the Animation window. Changes copy to the game clips automatically. Markers: 'Kill' = kill time, every other marker = one event; set its Blood / Heal / Shake / Hands below (Hands: World = the enemy can cover them, Overlay = back on top; always back to Overlay at the end).", MessageType.Info);
             if (GUILayout.Button("Apply to game clips now")) ExecutionAnimEditing.ApplyNow();
         }
 

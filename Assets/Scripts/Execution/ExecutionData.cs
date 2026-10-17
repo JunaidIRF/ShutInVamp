@@ -14,6 +14,14 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "ShutInVamp/Execution", fileName = "Execution")]
 public class ExecutionData : ScriptableObject
 {
+    /// <summary>Which layer the hands render on from this event on.</summary>
+    public enum HandsLayer
+    {
+        Keep,       // no change
+        World,      // normal scene layer: the victim's body can cover the hands (no drawing on top)
+        Overlay     // back to the first-person overlay layer (always restored at the end anyway)
+    }
+
     [System.Serializable]
     public struct Event
     {
@@ -22,6 +30,7 @@ public class ExecutionData : ScriptableObject
         public float shake;         // camera shake in degrees (0 = none)
         public float shakeTime;
         public float heal;          // health given to the player
+        public HandsLayer hands;    // switch the hands' render layer
     }
 
     [Tooltip("State name used in both the player's and the victim's animator controllers")]
