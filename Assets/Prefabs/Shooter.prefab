@@ -479,10 +479,13 @@ MonoBehaviour:
   preferredDistance: 10
   tooFar: 12.5
   tooClose: 7
-  moveSpeed: 3.5
-  retreatSpeed: 2.5
+  moveSpeed: 4.5
+  retreatSpeed: 4.3
   repathInterval: 0.25
   legsBlendSpeed: 6
+  walkAnimSpeed: 3.5
+  spreadDistance: 4
+  strafeAngle: 30
   kickRange: 2.5
   kickLungeTo: 1
   kickLungeMax: 2
@@ -531,8 +534,8 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 3.5
-  m_Acceleration: 14
+  m_Speed: 4.5
+  m_Acceleration: 20
   avoidancePriority: 50
   m_AngularSpeed: 0
   m_StoppingDistance: 0.2

@@ -6,9 +6,11 @@ public class Shooter : MonoBehaviour
 {
     /// <summary>Shooters whose kick is winding up right now (the player's guard ring shows a warning).</summary>
     public static readonly List<Shooter> Kicking = new List<Shooter>();
+    /// <summary>Every enabled shooter (they keep some room from each other).</summary>
+    public static readonly List<Shooter> Active = new List<Shooter>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics() => Kicking.Clear();
+    static void ResetStatics() { Kicking.Clear(); Active.Clear(); }
 
     [Header("References")]
     public Transform target;            // falls back to the Player in the scene
@@ -52,6 +54,9 @@ public class Shooter : MonoBehaviour
     public float retreatSpeed = 2.5f;
     public float repathInterval = 0.25f;
     public float legsBlendSpeed = 6f;   // how fast the walk layer fades in/out
+    public float walkAnimSpeed = 3.5f;  // the speed the walk clip is made for (it plays faster/slower to match)
+    public float spreadDistance = 4f;   // keep at least this far from other enemies
+    public float strafeAngle = 30f;     // how far round the player we step to get clear (degrees)
 
     [Header("Kick")]
     // when the player gets close (and we're not stunned) we kick them away
@@ -116,8 +121,11 @@ public class Shooter : MonoBehaviour
     static readonly int KickHash = Animator.StringToHash("Kick");
     static readonly int KickSpeedHash = Animator.StringToHash("KickSpeed");
     static readonly int MoveSpeedHash = Animator.StringToHash("MoveSpeed");
+    static readonly int WalkRateHash = Animator.StringToHash("WalkRate");
 
-    enum MoveMode { Hold, Approach, Retreat }
+    enum MoveMode { Hold, Approach, Retreat, Strafe }
+    enum Sight { Clear, World, Ally }   // what's between us and the player
+    int strafeSide = 1;
     MoveMode moveMode;
     float nextRepath;
     bool hasSight;
@@ -162,6 +170,7 @@ public class Shooter : MonoBehaviour
         {
             agent.enabled = true;
             agent.updateRotation = false;   // we face the player ourselves
+            agent.avoidancePriority = Random.Range(40, 60);   // so two enemies don't deadlock
             if (NavMesh.SamplePosition(transform.position, out NavMeshHit onMesh, 3f, NavMesh.AllAreas)) agent.Warp(onMesh.position);
         }
 
@@ -297,18 +306,26 @@ public class Shooter : MonoBehaviour
 
     void UpdateMovement()
     {
-        hasSight = CanSeeTarget();
+        Sight sight = LineToTarget();
+        hasSight = sight == Sight.Clear;
         if (!AgentReady) { UpdateWalkAnim(); return; }
 
         Vector3 to = target.position - transform.position;
         to.y = 0f;
         float dist = to.magnitude;
+        Shooter crowd = NearestAlly(out float allyDist);
 
         // decide (with hysteresis so it doesn't twitch at the edges)
-        if (dist > tooFar || !hasSight) moveMode = MoveMode.Approach;
-        else if (dist < tooClose && dist > kickRange) moveMode = MoveMode.Retreat;
+        if (dist > tooFar || sight == Sight.World) moveMode = MoveMode.Approach;            // too far / behind a wall
+        else if (dist < tooClose && dist > kickRange) moveMode = MoveMode.Retreat;          // too close
+        else if (sight == Sight.Ally || (crowd != null && allyDist < spreadDistance))      // another enemy in the way / too near
+        {
+            if (moveMode != MoveMode.Strafe) strafeSide = StrafeSideAwayFrom(crowd);
+            moveMode = MoveMode.Strafe;
+        }
         if (moveMode == MoveMode.Approach && hasSight && dist <= preferredDistance) moveMode = MoveMode.Hold;
         if (moveMode == MoveMode.Retreat && (dist >= preferredDistance - 1f || dist <= kickRange)) moveMode = MoveMode.Hold;
+        if (moveMode == MoveMode.Strafe && sight != Sight.Ally && (crowd == null || allyDist > spreadDistance + 0.5f)) moveMode = MoveMode.Hold;
 
         if (Time.time >= nextRepath)
         {
@@ -328,6 +345,15 @@ public class Shooter : MonoBehaviour
                         agent.SetDestination(point);
                     }
                     else { StopMoving(); moveMode = MoveMode.Hold; }   // cornered: stand and fight
+                    break;
+                case MoveMode.Strafe:
+                    agent.speed = retreatSpeed;
+                    if (FindStrafePoint(out Vector3 side))
+                    {
+                        agent.isStopped = false;
+                        agent.SetDestination(side);
+                    }
+                    else strafeSide = -strafeSide;   // blocked that way: try the other side next time
                     break;
                 default:
                     StopMoving();
@@ -355,13 +381,59 @@ public class Shooter : MonoBehaviour
         return false;
     }
 
-    /// <summary>Nothing (but the player) between our chest and theirs.</summary>
-    bool CanSeeTarget()
+    /// <summary>What's between our chest and the player's: nothing, the level, or another enemy.</summary>
+    Sight LineToTarget()
     {
         Vector3 from = ownCollider != null ? ownCollider.bounds.center : transform.position;
         Vector3 to = targetCollider != null ? targetCollider.bounds.center : target.position;
-        if (!Physics.Linecast(from, to, out RaycastHit hit, ~(1 << gameObject.layer), QueryTriggerInteraction.Ignore)) return true;
-        return hit.collider.transform.IsChildOf(target);
+        // our own capsule doesn't count (the line starts inside it); other enemies do
+        if (!Physics.Linecast(from, to, out RaycastHit hit, ~(1 << 2), QueryTriggerInteraction.Ignore)) return Sight.Clear;
+        if (hit.collider.transform.IsChildOf(target)) return Sight.Clear;
+        Shooter other = hit.collider.GetComponentInParent<Shooter>();
+        if (other == this) return Sight.Clear;
+        return other != null ? Sight.Ally : Sight.World;
+    }
+
+    /// <summary>The closest other living enemy (null if none).</summary>
+    Shooter NearestAlly(out float distance)
+    {
+        Shooter best = null;
+        distance = float.MaxValue;
+        foreach (Shooter s in Active)
+        {
+            if (s == this || s == null || s.isDead || s.isExecuted) continue;
+            Vector3 d = s.transform.position - transform.position;
+            d.y = 0f;
+            if (d.magnitude < distance) { distance = d.magnitude; best = s; }
+        }
+        return best;
+    }
+
+    /// <summary>+1 / -1: which way round the player moves us away from <paramref name="ally"/>.</summary>
+    int StrafeSideAwayFrom(Shooter ally)
+    {
+        if (ally == null) return Random.value < 0.5f ? 1 : -1;
+        Vector3 fromPlayer = transform.position - target.position;
+        Vector3 allyFromPlayer = ally.transform.position - target.position;
+        float cross = Vector3.Cross(allyFromPlayer, fromPlayer).y;
+        return cross >= 0f ? 1 : -1;
+    }
+
+    /// <summary>A spot strafeAngle further round the player at our current distance (on the NavMesh, reachable).</summary>
+    bool FindStrafePoint(out Vector3 point)
+    {
+        Vector3 fromPlayer = transform.position - target.position;
+        fromPlayer.y = 0f;
+        float radius = Mathf.Clamp(fromPlayer.magnitude, tooClose, tooFar);
+        Vector3 want = target.position + Quaternion.Euler(0f, strafeSide * strafeAngle, 0f) * fromPlayer.normalized * radius;
+        if (NavMesh.SamplePosition(want, out NavMeshHit hit, 1.5f, NavMesh.AllAreas) &&
+            !NavMesh.Raycast(agent.nextPosition, hit.position, out _, NavMesh.AllAreas))
+        {
+            point = hit.position;
+            return true;
+        }
+        point = transform.position;
+        return false;
     }
 
     void StopMoving()
@@ -379,8 +451,11 @@ public class Shooter : MonoBehaviour
         if (anim == null || legsLayer < 0) return;
         Vector3 v = AgentReady ? agent.velocity : Vector3.zero;
         v.y = 0f;
+        float speed = v.magnitude;
         float along = Vector3.Dot(v, transform.forward);
-        anim.SetFloat(MoveSpeedHash, Mathf.Clamp(along / Mathf.Max(moveSpeed, 0.01f) * 2f, -1f, 1f));
+        // walking forward or sideways uses the forward walk, clearly backwards the back walk
+        anim.SetFloat(MoveSpeedHash, speed < 0.3f ? 0f : (along < -0.3f * speed ? -1f : 1f));
+        anim.SetFloat(WalkRateHash, Mathf.Clamp(speed / Mathf.Max(walkAnimSpeed, 0.01f), 0.5f, 2f));
         float want = Mathf.Clamp01(v.magnitude / 1f);   // fully walking from 1 m/s
         legsWeight = Mathf.MoveTowards(legsWeight, want, legsBlendSpeed * Time.deltaTime);
         anim.SetLayerWeight(legsLayer, legsWeight);
@@ -399,7 +474,13 @@ public class Shooter : MonoBehaviour
         Kicking.Remove(this);
     }
 
-    void OnDisable() => Kicking.Remove(this);
+    void OnEnable() { if (!Active.Contains(this)) Active.Add(this); }
+
+    void OnDisable()
+    {
+        Kicking.Remove(this);
+        Active.Remove(this);
+    }
 
     bool TargetInFront(float range)
     {
@@ -501,6 +582,22 @@ public class Shooter : MonoBehaviour
             anim.SetTrigger(HitHash);
             anim.SetBool(StunnedHash, true);
         }
+    }
+
+    /// <summary>
+    /// A hit that hurts but doesn't stun (punches): damage, blood, flash and a squash; we keep fighting.
+    /// Only parried stakes / kicks stun us (and so open executions).
+    /// </summary>
+    public void Hit(Vector3 point, Vector3 direction, float damage)
+    {
+        if (isDead || isExecuted) return;
+        health = Mathf.Max(health - damage, 0f);
+        UpdateHealthBar();
+        Bleed(point, direction);
+        if (hitFlash != null) hitFlash.Flash();
+        if (health <= 0f) { Die(point, direction); return; }
+        bounceStartTime = Time.time;
+        bouncing = true;
     }
 
     /// <summary>Blood at <paramref name="point"/>, spraying back against <paramref name="direction"/>.</summary>

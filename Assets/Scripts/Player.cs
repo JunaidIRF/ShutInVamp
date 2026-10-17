@@ -27,7 +27,6 @@ public class Player : MonoBehaviour
     public float punchRange = 1.7f;
     public float punchRadius = 0.35f;
     public float punchHitDelay = 0.1f;  // the fist clips' impact frame
-    public float punchStun = 0.6f;      // long enough to follow up with an execution
     public float punchShake = 0.8f;     // degrees
 
     float pendingPunchTime = -1f;
@@ -86,7 +85,7 @@ public class Player : MonoBehaviour
 
         Shooter shooter = hit.collider.GetComponentInParent<Shooter>();
         if (shooter == null || shooter.IsDead) return;
-        shooter.Stagger(hit.point, cam.forward, punchDamage, punchStun);
+        shooter.Hit(hit.point, cam.forward, punchDamage);   // hurts, but only parries stun (open executions)
         if (juice != null) juice.Shake(punchShake, 0.15f);
     }
 
