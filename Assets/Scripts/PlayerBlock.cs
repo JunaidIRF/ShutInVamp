@@ -36,6 +36,7 @@ public class PlayerBlock : MonoBehaviour
     public GuardJuice juice;                // slow motion / chromatic aberration / shake / ring pulse
 
     [Header("UI")]
+    public ThreatIndicator threats;         // the outer ring for attacks from outside the guard (behind / far to the side)
     public GameObject guardVisuals;         // ring base + guard arc, shown while guarding
     public Image guardArc;
     public Image incomingTemplate;          // red arc cloned per incoming bullet
@@ -286,12 +287,27 @@ public class PlayerBlock : MonoBehaviour
         {
             player.TakeDamage(bullet.damage);
             HitPop();
+            HitFromDirection(from);
         }
 
         Destroy(bullet.gameObject);
     }
 
-    Vector3 Center => body != null ? body.bounds.center : transform.position;
+    public Vector3 Center => body != null ? body.bounds.center : transform.position;
+
+    /// <summary>Can an attack coming from <paramref name="toward"/> (a direction from us) be blocked or parried at all?</summary>
+    public bool CanGuard(Vector3 toward) => Facing(toward);
+
+    /// <summary>
+    /// An attack from <paramref name="attacker"/> (world position) just hit us. One from outside the guard
+    /// flashes on the threat ring, pointing at it.
+    /// </summary>
+    public void HitFrom(Vector3 attacker) => HitFromDirection(attacker - Center);
+
+    void HitFromDirection(Vector3 toward)
+    {
+        if (threats != null && !Facing(toward)) threats.Flash(toward);
+    }
 
     /// <summary>Is <paramref name="toward"/> (flat) within <see cref="guardFacing"/> of where we're facing? The guard only covers the front.</summary>
     bool Facing(Vector3 toward)
@@ -344,6 +360,7 @@ public class PlayerBlock : MonoBehaviour
             Vector3 dir = bullet.velocity / bullet.Speed;
             float along = Vector3.Dot(Center - bullet.transform.position, dir);
             if (along <= 0f) continue; // already flew past
+            if (!Facing(-dir)) continue;  // from outside the guard: the threat ring shows it instead
 
             if (used == incomingPool.Count)
                 incomingPool.Add(Instantiate(incomingTemplate, incomingTemplate.transform.parent));
@@ -369,7 +386,7 @@ public class PlayerBlock : MonoBehaviour
         // (no countdown: when to parry has to be read off the kick itself)
         foreach (Shooter s in Shooter.Kicking)
         {
-            if (s == null) continue;
+            if (s == null || !Facing(s.transform.position - Center)) continue;   // behind us: the threat ring
             if (used == incomingPool.Count)
                 incomingPool.Add(Instantiate(incomingTemplate, incomingTemplate.transform.parent));
             Image arc = incomingPool[used++];

@@ -622,7 +622,7 @@ public class Shooter : MonoBehaviour
         {
             var player = victim.GetComponent<Player>();
             if (player != null) player.TakeDamage(kickDamage);
-            if (block != null) block.HitPop();
+            if (block != null) { block.HitPop(); block.HitFrom(transform.position); }
         }
 
         var move = victim.GetComponent<PlayerMovement>();
