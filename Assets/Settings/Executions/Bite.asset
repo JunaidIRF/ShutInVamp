@@ -22,6 +22,7 @@ MonoBehaviour:
   killBodySpeed: 2.1
   killHitSpeed: 3.6
   killLift: 0.36
+  decapitateOnKill: 0
   events:
   - time: 0.21666667
     blood: 0
@@ -30,6 +31,7 @@ MonoBehaviour:
     heal: 0
     hands: 1
     bone: 
+    sever: 0
   - time: 0.4
     blood: 0
     shake: 2.5
@@ -37,17 +39,28 @@ MonoBehaviour:
     heal: 10
     hands: 1
     bone: 
+    sever: 0
   - time: 0.75
+    blood: 0
+    shake: 0.8
+    shakeTime: 0.15
+    heal: 0
+    hands: 0
+    bone: 
+    sever: 0
+  - time: 0.9
     blood: 1
+    shake: 0.8
+    shakeTime: 0.15
+    heal: 75
+    hands: 0
+    bone: 
+    sever: 2
+  - time: 1.05
+    blood: 0
     shake: 0.8
     shakeTime: 0.15
     heal: 10
     hands: 0
     bone: 
-  - time: 1.05
-    blood: 1
-    shake: 0.8
-    shakeTime: 0.15
-    heal: 10
-    hands: 2
-    bone: 
+    sever: 0
