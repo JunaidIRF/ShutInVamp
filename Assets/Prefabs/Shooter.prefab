@@ -505,6 +505,16 @@ MonoBehaviour:
   kickLift: 4
   kickParryWindow: 0.06
   kickParriedDistance: 0.6
+  throwSound:
+    clip: {fileID: 8300000, guid: 5651982cada8d61488722baa04b24200, type: 3}
+    volume: 0.85
+    pitch: {x: 0.9, y: 1.12}
+    spatial: 1
+  kickSound:
+    clip: {fileID: 8300000, guid: f86c30b338dba744bbbcd020d53be063, type: 3}
+    volume: 1
+    pitch: {x: 0.92, y: 1.08}
+    spatial: 0.7
   anim: {fileID: 7817265536408058280}
   ragdoll: {fileID: 3377334243892157605}
   deathKnockSpeed: 3.5
@@ -1384,6 +1394,11 @@ MonoBehaviour:
   bloodColor: {r: 0.2, g: 0, b: 0.01, a: 1}
   stainAround: 0.05
   stainDrip: 0.3
+  severSound:
+    clip: {fileID: 8300000, guid: 6aa8aec87881f8744b472afcbc235a0e, type: 3}
+    volume: 1
+    pitch: {x: 0.88, y: 1.08}
+    spatial: 1
   bleedTime: 6
   bleedStrength: 0.15
   bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}

@@ -9096,6 +9096,11 @@ MonoBehaviour:
   punchRadius: 0.35
   punchHitDelay: 0.1
   punchShake: 0.8
+  clawSound:
+    clip: {fileID: 8300000, guid: 8cd8a96b8f55e4e44b421757e942fa43, type: 3}
+    volume: 0.8
+    pitch: {x: 0.88, y: 1.12}
+    spatial: 0
 --- !u!114 &8213888485866622640
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9180,6 +9185,11 @@ MonoBehaviour:
   slideSteer: 1.2
   slideCooldown: 0.5
   slideShake: 0.12
+  slideSound:
+    clip: {fileID: 8300000, guid: cdeb387fc9b2bb540bbb07c0bc9dc9b7, type: 3}
+    volume: 0.8
+    pitch: {x: 0.93, y: 1.07}
+    spatial: 0
   handsAnim: {fileID: 2954540343418349149}
   knockbackDrag: 10
   velocity: {x: 0, y: 0, z: 0}
@@ -9310,6 +9320,21 @@ MonoBehaviour:
   anim: {fileID: 2954540343418349149}
   parryTag: Parry
   juice: {fileID: 5879824131008612246}
+  parrySwingSound:
+    clip: {fileID: 8300000, guid: 58692d261938a0a4cb46a8de2cfe7919, type: 3}
+    volume: 0.7
+    pitch: {x: 0.9, y: 1.12}
+    spatial: 0
+  parrySound:
+    clip: {fileID: 8300000, guid: e9875c052bddfe146a424f47bee56d71, type: 3}
+    volume: 1
+    pitch: {x: 0.95, y: 1.05}
+    spatial: 0
+  blockSound:
+    clip: {fileID: 8300000, guid: 227c71fd11a39df478479a554af8a85a, type: 3}
+    volume: 0.9
+    pitch: {x: 0.92, y: 1.08}
+    spatial: 0
   threats: {fileID: 2338265075378460233}
   guardVisuals: {fileID: 3031849400596410963}
   guardArc: {fileID: 8319001754983015297}
@@ -9425,6 +9450,18 @@ MonoBehaviour:
   lingerTime: 0.5
   burnTickDamage: 5
   burnTickInterval: 0.5
+  burnLoop:
+    clip: {fileID: 8300000, guid: 54a71b45c7945b74faa83e70deb02e43, type: 3}
+    volume: 0.6
+    pitch: {x: 0.95, y: 1.05}
+    spatial: 0
+  burnTick:
+    clip: {fileID: 8300000, guid: cb93fd2789382ad42a0d415f7ea51a0c, type: 3}
+    volume: 0.75
+    pitch: {x: 0.9, y: 1.1}
+    spatial: 0
+  loopFadeIn: 6
+  loopFadeOut: 2.5
   overlayAlpha: 1
   flicker: 0.15
   flickerSpeed: 8
@@ -9458,6 +9495,16 @@ MonoBehaviour:
   key: 101
   range: 1.6
   maxAngle: 55
+  executionSound:
+    clip: {fileID: 8300000, guid: 9911e531a64444d42add9debcfa2e01b, type: 3}
+    volume: 1
+    pitch: {x: 0.97, y: 1.03}
+    spatial: 0
+  bloodSound:
+    clip: {fileID: 8300000, guid: 6aa8aec87881f8744b472afcbc235a0e, type: 3}
+    volume: 0.9
+    pitch: {x: 0.9, y: 1.1}
+    spatial: 0.6
   hands: []
   worldHandsLayer: 0
 --- !u!114 &3175878800404500412

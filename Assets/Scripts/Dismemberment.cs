@@ -101,6 +101,9 @@ public class Dismemberment : MonoBehaviour
     public float stainAround = 0.05f;       // m past the edge of the wound
     public float stainDrip = 0.3f;          // m it runs down below the wound
 
+    [Header("Sound")]
+    public Sfx severSound;                  // a part comes off (from the wound)
+
     [Header("Bleeding")]
     [Tooltip("After the spurts, the wound keeps dribbling this long (s), fading out")]
     public float bleedTime = 6f;
@@ -264,6 +267,7 @@ public class Dismemberment : MonoBehaviour
         // a splash at the cut, then the wound pumps blood out in pulses
         Transform jetParent = bone.parent;
         if (bloodFx != null) Destroy(Instantiate(bloodFx, cutPoint, Quaternion.LookRotation(along)), bloodLifetime);
+        severSound?.PlayAt(cutPoint);
         StartCoroutine(Spurt(jetParent, cutPoint, along, spurts, 1f, true));
         if (piece != null) StartCoroutine(Spurt(piece, cutPoint, -along, pieceSpurts, pieceSpurtStrength, false));
         return true;

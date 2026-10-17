@@ -34,12 +34,17 @@ public class Player : MonoBehaviour
     public float punchHitDelay = 0.1f;  // the fist clips' impact frame
     public float punchShake = 0.8f;     // degrees
 
+    [Header("Sound")]
+    public Sfx clawSound;               // every claw swing
+
     float pendingPunchTime = -1f;
+    float nextClawSound;
 
     private void Start()
     {
         Instance = this;
         pendingPunchTime = -1f;
+        nextClawSound = 0f;
         health = maxHealth;
         UpdateHealthBar();
     }
@@ -63,6 +68,8 @@ public class Player : MonoBehaviour
         {
             anim.SetTrigger(attackName + lastAttackCount);
             pendingPunchTime = Time.time + punchHitDelay;
+            // held down, the trigger can be set a frame or two before the swing starts: one sound per swing
+            if (Time.time >= nextClawSound) { clawSound?.Play(); nextClawSound = Time.time + 0.2f; }
 
             if (lastAttackCount < lastAttack)
             {

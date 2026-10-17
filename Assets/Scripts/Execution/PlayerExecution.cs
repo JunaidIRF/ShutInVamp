@@ -28,6 +28,10 @@ public class PlayerExecution : MonoBehaviour
     public float range = 1.6f;              // flat distance to the enemy
     public float maxAngle = 55f;            // enemy must be this close to where we look
 
+    [Header("Sound")]
+    public Sfx executionSound;              // when the execution animation starts
+    public Sfx bloodSound;                  // an event with Blood on (from the bone)
+
     [Header("Hands layer")]
     public Transform[] hands;               // RHand / LHand (found under the animator if empty)
     public int worldHandsLayer = 0;         // "World" events put the hands here (Default: drawn by the main camera)
@@ -139,6 +143,7 @@ public class PlayerExecution : MonoBehaviour
         // 2. both states start on the same frame with no blend, so they advance in lockstep
         anim.Play(data.stateName, 0, 0f);
         victimAnim.Play(data.stateName, 0, 0f);
+        executionSound?.Play();
 
         // 3. timed events on the same clock the animators use (scaled time)
         var events = data.events != null ? (ExecutionData.Event[])data.events.Clone() : new ExecutionData.Event[0];
@@ -205,7 +210,11 @@ public class PlayerExecution : MonoBehaviour
 
     void Fire(ExecutionData.Event e, Shooter victim, Transform bone)
     {
-        if (e.blood) victim.Bleed(bone.position, BiteDirection(bone));
+        if (e.blood)
+        {
+            victim.Bleed(bone.position, BiteDirection(bone));
+            if (e.sever == Dismemberment.BodyPart.None) bloodSound?.PlayAt(bone.position);   // a cut plays its own
+        }
         if (e.sever != Dismemberment.BodyPart.None)
         {
             Transform cut = victim.PartBone(e.sever);

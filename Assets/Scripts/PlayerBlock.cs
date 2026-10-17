@@ -35,6 +35,11 @@ public class PlayerBlock : MonoBehaviour
     public string parryTag = "Parry";       // tag on the parry states — a missed parry locks blocking until it ends
     public GuardJuice juice;                // slow motion / chromatic aberration / shake / ring pulse
 
+    [Header("Sound")]
+    public Sfx parrySwingSound;             // every parry press: the swipe through the air
+    public Sfx parrySound;                  // a parry landed (once per parry, however many stakes / kicks it catches)
+    public Sfx blockSound;                  // a stake taken on the guard
+
     [Header("UI")]
     public ThreatIndicator threats;         // the outer ring for attacks from outside the guard (behind / far to the side)
     public GameObject guardVisuals;         // ring base + guard arc, shown while guarding
@@ -194,6 +199,7 @@ public class PlayerBlock : MonoBehaviour
             lastParryPress = Time.time;
             parryLanded = false;
             PlayDirectional("Parry", "Block");
+            parrySwingSound?.Play();
         }
     }
 
@@ -245,6 +251,7 @@ public class PlayerBlock : MonoBehaviour
         {
             Flash(parryFlashColor);
             if (juice != null) juice.Parry();
+            parrySound?.Play();
         }
         parryLanded = true;
         if (player != null) player.Heal(parryHeal);
@@ -272,6 +279,7 @@ public class PlayerBlock : MonoBehaviour
             {
                 Flash(parryFlashColor);
                 if (juice != null) juice.Parry();   // slow-mo etc. once per parry, not per stake
+                parrySound?.Play();
             }
             return;
         }
@@ -281,6 +289,7 @@ public class PlayerBlock : MonoBehaviour
             Flash(blockFlashColor);
             PlayDirectional("Block", "Parry");
             if (juice != null) juice.Block();
+            blockSound?.Play();
             player.TakeDamage(bullet.damage * chipDamage);
         }
         else

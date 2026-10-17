@@ -88,6 +88,10 @@ public class Shooter : MonoBehaviour
     public float kickParryWindow = 0.06f; // the right-click must land this close before impact (stakes: 0.2)
     [Range(0f, 1f)] public float kickParriedDistance = 0.6f;  // a parried kick still shoves you this fraction as far (no damage)
 
+    [Header("Sound")]
+    public Sfx throwSound;              // the stake leaving the hand (from the hand)
+    public Sfx kickSound;               // a kick connecting (a parried one plays the player's parry instead)
+
     [Header("Animation")]
     public Animator anim;               // on the model: Throw / Hit / Kick triggers, Stunned bool
 
@@ -621,6 +625,7 @@ public class Shooter : MonoBehaviour
         else
         {
             var player = victim.GetComponent<Player>();
+            kickSound?.PlayAt(Vector3.Lerp(transform.position, victim.position, 0.5f));
             if (player != null) player.TakeDamage(kickDamage);
             if (block != null) { block.HitPop(); block.HitFrom(transform.position); }
         }
@@ -638,6 +643,7 @@ public class Shooter : MonoBehaviour
 
         Vector3 aim = targetCollider != null ? AimAroundBody(targetCollider.bounds) : target.position;
         Bullet bullet = Instantiate(bulletPrefab, muzzle.position, Quaternion.identity);
+        throwSound?.PlayAt(muzzle.position);
         bullet.Launch(aim - muzzle.position, bulletSpeed, damage, this);
     }
 

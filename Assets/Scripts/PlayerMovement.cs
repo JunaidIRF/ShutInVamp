@@ -100,6 +100,7 @@ public class PlayerMovement : MonoBehaviour
     public float slideSteer = 1.2f;         // rad/s it can be steered with the movement keys
     public float slideCooldown = 0.5f;
     public float slideShake = 0.12f;        // degrees of rumble while sliding
+    public Sfx slideSound;                  // when a slide starts
     public Animator handsAnim;              // Camera Head animator ("Sliding" bool); found if empty
 
     [Header("Knockback")]
@@ -636,6 +637,7 @@ public class PlayerMovement : MonoBehaviour
     void StartSlide(Vector3 flatVelocity)
     {
         isSliding = true;
+        slideSound?.Play();
         slideDir = flatVelocity.normalized;
         slideSpeed = Mathf.Min(flatVelocity.magnitude + slideBoost, slideMaxSpeed);
         slideTime = 0f;

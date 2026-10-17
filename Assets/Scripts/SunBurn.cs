@@ -25,6 +25,12 @@ public class SunBurn : MonoBehaviour
     public float burnTickDamage = 5f;
     public float burnTickInterval = 0.5f;   // 5 every 0.5 s = 10 HP/s
 
+    [Header("Sound")]
+    public Sfx burnLoop;                    // loops while on fire (its volume is the loop's full volume)
+    public Sfx burnTick;                    // every damage tick
+    public float loopFadeIn = 6f;           // volume per second up when catching fire...
+    public float loopFadeOut = 2.5f;        // ...and down when it goes out
+
     [Header("Look")]
     [Range(0f, 1f)] public float overlayAlpha = 0.3f;
     public float flicker = 0.15f;
@@ -42,6 +48,7 @@ public class SunBurn : MonoBehaviour
     public bool OnFire { get; private set; }
 
     Collider body;
+    AudioSource loopSource;
     float exposure;                         // 0..1 warming up towards igniting
     float lastLitTime;
     float nextTickTime;
@@ -61,6 +68,24 @@ public class SunBurn : MonoBehaviour
         SetHandFires(false, true);
         ApplyLook(0f);
         UpdateSunIcon();
+
+        // the burning loop: its own source (made at runtime, reused if it's already there)
+        if (loopSource == null)
+        {
+            Transform t = transform.Find("Burn Loop");
+            loopSource = t != null ? t.GetComponent<AudioSource>() : null;
+            if (loopSource == null)
+            {
+                var go = new GameObject("Burn Loop");
+                go.transform.SetParent(transform, false);
+                loopSource = go.AddComponent<AudioSource>();
+            }
+        }
+        loopSource.playOnAwake = false;
+        loopSource.loop = true;
+        loopSource.spatialBlend = 0f;
+        loopSource.volume = 0f;
+        loopSource.Stop();
     }
 
     void OnDisable()
@@ -68,6 +93,23 @@ public class SunBurn : MonoBehaviour
         OnFire = false;
         SetHandFires(false, true);
         ApplyLook(0f);
+        if (loopSource != null) { loopSource.Stop(); loopSource.volume = 0f; }
+    }
+
+    /// <summary>The burning loop follows being on fire: fades in fast, out a little slower.</summary>
+    void UpdateLoop()
+    {
+        if (loopSource == null || burnLoop == null || burnLoop.clip == null) return;
+        float target = OnFire ? burnLoop.volume : 0f;
+        float rate = OnFire ? loopFadeIn : loopFadeOut;
+        loopSource.volume = Mathf.MoveTowards(loopSource.volume, target, rate * burnLoop.volume * Time.unscaledDeltaTime);
+        if (loopSource.volume > 0f && !loopSource.isPlaying)
+        {
+            loopSource.clip = burnLoop.clip;
+            loopSource.pitch = burnLoop.RandomPitch();
+            loopSource.Play();
+        }
+        else if (loopSource.volume <= 0f && loopSource.isPlaying) loopSource.Stop();
     }
 
     void Update()
@@ -85,7 +127,9 @@ public class SunBurn : MonoBehaviour
         {
             nextTickTime = Time.time + burnTickInterval;
             if (player != null) player.TakeDamage(burnTickDamage);   // HurtFeedback pulses on each tick
+            burnTick?.Play();
         }
+        UpdateLoop();
 
         // screen grade only while actually burning — the sun icon is the warning
         look = Mathf.MoveTowards(look, OnFire ? 1f : 0f, fadeSpeed * Time.unscaledDeltaTime);
