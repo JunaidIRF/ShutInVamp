@@ -29,15 +29,14 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Coverage: 0.4
-    - _Density: 150
-    - _Flicker: 4
-    - _Inner: 0.55
-    - _Length: 2.2
-    - _Opacity: 0.6
-    - _Outer: 1.1
-    - _Speed: 2.5
+    - _Coverage: 0.28
+    - _Opacity: 0.5
+    - _Rate: 9
+    - _ReachMax: 0.85
+    - _ReachMin: 0.55
+    - _Slots: 32
+    - _Width: 0.018
     m_Colors:
-    - _Color: {r: 0.92, g: 0.96, b: 1, a: 1}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
