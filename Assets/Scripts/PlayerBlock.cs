@@ -48,6 +48,12 @@ public class PlayerBlock : MonoBehaviour
     public Color hitFlashColor = new Color(1f, 0.15f, 0.1f);
     public Color lockedColor = new Color(1f, 1f, 1f, 0.25f);   // guard while a missed parry recovers
     public float flashTime = 0.25f;
+
+    [Header("Guard lean")]
+    // while guarding, the view leans a little towards the guard: up = look up, right = turn + roll right
+    public float guardTilt = 3f;            // degrees of pitch / yaw at full guard
+    public float guardRoll = 2f;            // degrees of roll for a side guard
+    public float leanSpeed = 10f;           // how fast it eases in / out
     public float popScale = 0.28f;          // the guard arc pops this much bigger on a block / parry / hit
     public float popTime = 0.2f;
 
@@ -82,6 +88,9 @@ public class PlayerBlock : MonoBehaviour
         // Enter Play Mode skips scene/domain reload in this project, so fields keep their
         // values between runs — start from a clean state (stale pool entries were destroyed).
         incomingPool.Clear();
+        camParent = anim != null ? anim.transform.Find("CamParent") : null;
+        lean = Vector3.zero;
+        leanWritten = false;
         lastParryPress = float.NegativeInfinity;
         parryLanded = false;
         flashEndTime = 0f;
@@ -89,6 +98,55 @@ public class PlayerBlock : MonoBehaviour
 
         if (incomingTemplate != null) incomingTemplate.gameObject.SetActive(false);
         SetGuarding(false);
+    }
+
+    Transform camParent;
+    Vector3 lean;                           // current lean (pitch, yaw, roll)
+    Quaternion lastLean = Quaternion.identity, lastWritten;
+    bool leanWritten;
+
+    /// <summary>
+    /// After the Animator (which drives CamParent for inspect / punches / blocks / executions): lean the view
+    /// towards the guard. If the Animator didn't rewrite CamParent this frame, last frame's lean is taken
+    /// off first, so it never stacks up.
+    /// </summary>
+    void LateUpdate()
+    {
+        if (camParent == null) return;
+        Vector3 want = Vector3.zero;
+        if (isGuarding && !PlayerExecution.IsExecuting)
+        {
+            float a = guardAngle * Mathf.Deg2Rad;
+            float amount = Mathf.Clamp01(guardStick.magnitude);
+            float x = Mathf.Sin(a) * amount, y = Mathf.Cos(a) * amount;
+            want = new Vector3(-y * guardTilt, x * guardTilt, -x * guardRoll);
+        }
+        lean = Vector3.Lerp(lean, want, 1f - Mathf.Exp(-leanSpeed * Time.unscaledDeltaTime));   // unscaled: parry slow-mo doesn't freeze it
+
+        Quaternion current = camParent.localRotation;
+        Quaternion baseRot = leanWritten && Quaternion.Angle(current, lastWritten) < 0.001f
+            ? current * Quaternion.Inverse(lastLean)   // untouched since last frame: remove our old lean
+            : current;                                // the Animator rewrote it
+        if (lean.sqrMagnitude < 0.0001f && want == Vector3.zero)
+        {
+            if (leanWritten) camParent.localRotation = baseRot;
+            leanWritten = false;
+            lastLean = Quaternion.identity;
+            return;
+        }
+        Quaternion q = Quaternion.Euler(lean);
+        camParent.localRotation = baseRot * q;
+        lastLean = q;
+        lastWritten = camParent.localRotation;
+        leanWritten = true;
+    }
+
+    void OnDisable()
+    {
+        if (camParent != null && leanWritten && Quaternion.Angle(camParent.localRotation, lastWritten) < 0.001f)
+            camParent.localRotation = camParent.localRotation * Quaternion.Inverse(lastLean);
+        leanWritten = false;
+        lean = Vector3.zero;
     }
 
     void Update()
