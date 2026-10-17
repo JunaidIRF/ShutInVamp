@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 
@@ -9,8 +10,9 @@ using UnityEngine.UI;
 /// briefly after reaching shade. Safe exactly where the scene draws shadow.
 /// Drives a warm grade + flickering edge glow (a warning while warming up) and flames on the hands.
 /// Bare, the sun kills in a couple of seconds. Every execution (not a plain kill) feeds a sun ward (seconds of protection, capped):
-/// while it lasts you don't burn at all (no fire, no damage; just the orange glow as a reminder), and it drains
-/// while you're in the light — enough to dash across a street.
+/// while it lasts you don't burn at all (no fire, no damage) and it drains while you're in the light — enough to
+/// dash across a street. In the sun on the ward the screen edges glow in its colour, blue when full through green
+/// and orange to red as it runs out (the ward bar and sun icon follow); then the burn's own orange and the fire.
 /// </summary>
 public class SunBurn : MonoBehaviour
 {
@@ -35,7 +37,8 @@ public class SunBurn : MonoBehaviour
     public float wardMax = 8f;              // ...stacking up to this
     public HealthBarFx wardBar;             // HUD3D/WardBar: eased fill + white trail of what the sun just took
     public Graphic wardFillGraphic;         // flashes bright when an execution tops it up
-    public Color wardColor = new Color(1f, 0.42f, 0.12f, 1f);
+    [Tooltip("The ward's colour by how much is left (right = full): screen edges, bar and sun icon")]
+    public Gradient wardColors = DefaultWardColors();
     public Color wardGainColor = new Color(1f, 0.9f, 0.55f, 1f);
 
     [Header("Sound")]
@@ -46,7 +49,8 @@ public class SunBurn : MonoBehaviour
 
     [Header("Look")]
     [Range(0f, 1f)] public float overlayAlpha = 0.3f;
-    [Range(0f, 1f)] public float wardedGlow = 0.6f;   // the orange screen glow in the sun on the ward (no flames)
+    [Range(0f, 1f)] public float wardVignette = 0.42f;      // how dark the coloured edges get in the sun on the ward...
+    [Range(0.01f, 1f)] public float wardVignetteSmoothness = 0.45f;   // ...and how far in they reach
     public float flicker = 0.15f;
     public float flickerSpeed = 8f;
     public float fadeSpeed = 4f;            // how fast the burn look follows the state
@@ -56,7 +60,6 @@ public class SunBurn : MonoBehaviour
     public Color iconShade = new Color(0.7f, 0.7f, 0.7f, 0.3f);
     public Color iconSun = new Color(1f, 0.95f, 0.6f, 1f);
     public Color iconFire = new Color(1f, 0.5f, 0.1f, 1f);
-    public Color iconWarded = new Color(1f, 0.42f, 0.12f, 0.85f);   // in the sun on the ward
     public float iconPulse = 0.15f;         // scale pulse while in sun (stronger while burning)
 
     public bool IsLit { get; private set; }
@@ -71,6 +74,9 @@ public class SunBurn : MonoBehaviour
     float nextTickTime;
     float look;                             // smoothed 0..1 orange screen glow
     float fireLook;                         // smoothed 0..1 flames on screen + hand lights (only when on fire)
+    Vignette vignette;                      // the burn volume's own (a runtime copy of the profile)
+    Color burnVignetteColor;
+    float burnVignetteIntensity, burnVignetteSmoothness;
     float wardFlash;                        // 1 on a kill, fades
 
     void Start()
@@ -89,6 +95,15 @@ public class SunBurn : MonoBehaviour
         ApplyLook(0f, 0f);
         UpdateSunIcon();
         SetWard(0f);
+
+        // the vignette changes colour with the ward: work on this volume's own copy, not the shared asset
+        vignette = null;
+        if (volume != null && volume.profile != null && volume.profile.TryGet(out vignette))
+        {
+            burnVignetteColor = vignette.color.value;
+            burnVignetteIntensity = vignette.intensity.value;
+            burnVignetteSmoothness = vignette.smoothness.value;
+        }
 
         // the burning loop: its own source (made at runtime, reused if it's already there)
         if (loopSource == null)
@@ -126,10 +141,28 @@ public class SunBurn : MonoBehaviour
         UpdateWardBar();
     }
 
+    /// <summary>The ward's colour for what's left of it.</summary>
+    public Color WardColor => wardColors.Evaluate(wardMax > 0f ? Ward / wardMax : 0f);
+
+    static Gradient DefaultWardColors()
+    {
+        var g = new Gradient();
+        g.SetKeys(
+            new[]
+            {
+                new GradientColorKey(new Color(1f, 0.08f, 0.05f), 0f),     // red: about to go
+                new GradientColorKey(new Color(1f, 0.5f, 0.08f), 0.3f),    // orange
+                new GradientColorKey(new Color(0.2f, 0.95f, 0.35f), 0.62f),// green
+                new GradientColorKey(new Color(0.2f, 0.55f, 1f), 1f),      // blue: full
+            },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) });
+        return g;
+    }
+
     void UpdateWardBar()
     {
         if (wardBar != null) wardBar.SetValue(wardMax > 0f ? Ward / wardMax : 0f);
-        if (wardFillGraphic != null) wardFillGraphic.color = Color.Lerp(wardColor, wardGainColor, wardFlash);
+        if (wardFillGraphic != null) wardFillGraphic.color = Color.Lerp(WardColor, wardGainColor, wardFlash);
     }
 
     void OnDisable()
@@ -184,8 +217,15 @@ public class SunBurn : MonoBehaviour
         UpdateLoop();
 
         // the orange glow while burning, softer in the sun on the ward; flames only while actually burning
-        float glow = OnFire ? 1f : IsLit && Ward > 0f ? wardedGlow : 0f;
+        bool warded = !OnFire && IsLit && Ward > 0f;
+        float glow = OnFire || warded || (IsLit && exposure > 0f) ? 1f : 0f;   // (no dip between the ward running out and catching fire)
         look = Mathf.MoveTowards(look, glow, fadeSpeed * Time.unscaledDeltaTime);
+        if (vignette != null)
+        {
+            vignette.color.value = warded ? WardColor : burnVignetteColor;
+            vignette.intensity.value = warded ? wardVignette : burnVignetteIntensity;
+            vignette.smoothness.value = warded ? wardVignetteSmoothness : burnVignetteSmoothness;
+        }
         fireLook = Mathf.MoveTowards(fireLook, OnFire ? 1f : 0f, fadeSpeed * Time.unscaledDeltaTime);
         float f = (Mathf.PerlinNoise(Time.unscaledTime * flickerSpeed, 0.37f) - 0.5f) * 2f * flicker;
         ApplyLook(Mathf.Clamp01(look + f * look), Mathf.Clamp01(fireLook + f * fireLook));
@@ -206,7 +246,7 @@ public class SunBurn : MonoBehaviour
         }
         else if (IsLit && Ward > 0f)
         {
-            c = iconWarded;
+            c = WardColor;
             pulse = iconPulse * 0.5f * Mathf.Abs(Mathf.Sin(t * 4f));   // calm: the ward has it
         }
         else if (IsLit)

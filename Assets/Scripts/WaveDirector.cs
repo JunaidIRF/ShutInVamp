@@ -64,11 +64,16 @@ public class WaveDirector : MonoBehaviour
     public MapBlock[] blocks;
     [Tooltip("Where you start again after dying (empty = where you fell)")]
     public Transform respawnPoint;
+    [Tooltip("Fade to black + Retry when you die (empty = found on the Player; none = the run restarts by itself)")]
+    public DeathScreen deathScreen;
 
     /// <summary>The block the player is in (or was last in); null without blocks.</summary>
     public MapBlock CurrentBlock { get; private set; }
 
     public Phase State { get; private set; }
+    /// <summary>Enemies killed this run (any way) and how many of those were executions.</summary>
+    public int Kills { get; private set; }
+    public int Executions { get; private set; }
     public int Wave { get; private set; }
     /// <summary>Best wave reached since play started.</summary>
     public int Best { get; private set; }
@@ -80,6 +85,7 @@ public class WaveDirector : MonoBehaviour
     Player player;
     PlayerMovement movement;
     SunBurn sunBurn;
+    PlayerBlock block;
     WaveHUD hud;
     readonly List<Shooter> alive = new List<Shooter>();
     readonly List<(Shooter body, float sinkAt)> corpses = new List<(Shooter, float)>();
@@ -90,8 +96,23 @@ public class WaveDirector : MonoBehaviour
     bool firstRun;
     float spawnInterval, nextSpawn, phaseEnd;
 
-    void OnEnable() => Player.Died += OnPlayerDied;
-    void OnDisable() => Player.Died -= OnPlayerDied;
+    void OnEnable()
+    {
+        Player.Died += OnPlayerDied;
+        Shooter.Killed += OnKilled;
+        Shooter.Executed += OnExecuted;
+    }
+
+    void OnDisable()
+    {
+        Player.Died -= OnPlayerDied;
+        Shooter.Killed -= OnKilled;
+        Shooter.Executed -= OnExecuted;
+        if (deathScreen != null) deathScreen.Retry -= OnRetry;
+    }
+
+    void OnKilled(Shooter _) { if (State != Phase.Dead) Kills++; }
+    void OnExecuted(Shooter _) { if (State != Phase.Dead) Executions++; }
 
     void Start()
     {
@@ -99,6 +120,9 @@ public class WaveDirector : MonoBehaviour
         player = FindAnyObjectByType<Player>();
         movement = player != null ? player.GetComponent<PlayerMovement>() : null;
         sunBurn = player != null ? player.GetComponent<SunBurn>() : null;
+        block = player != null ? player.GetComponent<PlayerBlock>() : null;
+        if (deathScreen == null && player != null) deathScreen = player.GetComponentInChildren<DeathScreen>(true);
+        if (deathScreen != null) { deathScreen.Retry -= OnRetry; deathScreen.Retry += OnRetry; deathScreen.Hide(); }
         hud = FindAnyObjectByType<WaveHUD>(FindObjectsInactive.Include);
         StopAllCoroutines();
         alive.Clear(); corpses.Clear(); sinking.Clear(); arriving.Clear();
@@ -127,6 +151,8 @@ public class WaveDirector : MonoBehaviour
         phaseEnd = Time.time + firstWaveDelay;
         if (movement != null && movement.Held) movement.Hold(false);
         if (sunBurn != null) sunBurn.enabled = true;
+        SetPlayerControl(true);
+        Kills = Executions = 0;
         // a fresh run: back at the respawn point (the first time you're already standing there), no ward
         if (respawnPoint != null && movement != null && !firstRun) movement.Teleport(respawnPoint.position, respawnPoint.forward);
         if (sunBurn != null) sunBurn.SetWard(0f);
@@ -177,7 +203,7 @@ public class WaveDirector : MonoBehaviour
                 break;
 
             case Phase.Dead:
-                if (now >= phaseEnd) { ClearArena(); if (player != null) player.Heal(player.maxHealth); BeginRun(); }
+                if (deathScreen == null && now >= phaseEnd) Restart();   // with a death screen, Retry restarts
                 break;
         }
 
@@ -189,6 +215,7 @@ public class WaveDirector : MonoBehaviour
                          : State == Phase.Break ? $"NEXT WAVE IN {Mathf.Max(1, Mathf.CeilToInt(phaseEnd - now))}"
                          : "";
             hud.SetStatus(top, under);
+            hud.SetKills(Kills, Executions);
         }
     }
 
@@ -221,8 +248,35 @@ public class WaveDirector : MonoBehaviour
         // no dying again and again where you fell (the sun) while the run waits to start over
         if (sunBurn != null) sunBurn.enabled = false;
         if (movement != null && !movement.Held) movement.Hold(true);
-        if (hud != null) hud.Announce("<color=#E0362C>YOU DIED</color>", Wave > 0 ? $"REACHED WAVE {Wave}" : "", Mathf.Max(0.5f, deathPause - 0.8f));
+        if (deathScreen != null)
+        {
+            SetPlayerControl(false);
+            deathScreen.Show($"WAVE {Mathf.Max(1, Wave)}     {Kills} KILLS     {Executions} EXECUTED");
+        }
+        else if (hud != null) hud.Announce("<color=#E0362C>YOU DIED</color>", Wave > 0 ? $"REACHED WAVE {Wave}" : "", Mathf.Max(0.5f, deathPause - 0.8f));
         RunOver?.Invoke(Wave);
+    }
+
+    void OnRetry()
+    {
+        if (State == Phase.Dead) Restart();
+    }
+
+    /// <summary>A fresh run: the arena emptied, full health, back to the respawn point.</summary>
+    void Restart()
+    {
+        ClearArena();
+        if (player != null) player.Heal(player.maxHealth);
+        if (deathScreen != null) deathScreen.Hide();
+        BeginRun();
+    }
+
+    /// <summary>Mouse look, claws and guard on or off (off behind the death screen, so clicking Retry doesn't swing).</summary>
+    void SetPlayerControl(bool on)
+    {
+        if (movement != null) movement.SetLookEnabled(on);
+        if (player != null) player.enabled = on;
+        if (block != null) block.enabled = on;
     }
 
     /// <summary>Everyone gone (alive, dead or sinking), for a fresh run.</summary>
