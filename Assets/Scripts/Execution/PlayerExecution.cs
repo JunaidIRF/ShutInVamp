@@ -5,6 +5,8 @@ using UnityEngine;
 /// First-person executions. Shows a prompt when a stunned enemy is close and in front; on the key
 /// press it locks the player's controls, glides into place, then starts the player's and the
 /// victim's animator states on the same frame and fires the <see cref="ExecutionData"/> events.
+/// Dying, or the victim being removed (the arena is cleared when you die), cancels it cleanly: hands,
+/// hold and controls are given back, so the next run works.
 /// </summary>
 public class PlayerExecution : MonoBehaviour
 {
@@ -37,6 +39,8 @@ public class PlayerExecution : MonoBehaviour
     public int worldHandsLayer = 0;         // "World" events put the hands here (Default: drawn by the main camera)
 
     Shooter candidate;
+    Coroutine running;
+    static readonly int IdleHash = Animator.StringToHash("Idle");
     // every object under the hands with its own layer (hands sit on the overlay layer, so does their fire)
     readonly System.Collections.Generic.List<(GameObject go, int layer)> handLayers = new System.Collections.Generic.List<(GameObject, int)>();
 
@@ -47,18 +51,35 @@ public class PlayerExecution : MonoBehaviour
         SetPrompt(false);
     }
 
+    void OnEnable() => Player.Died += Cancel;
+
     void OnDisable()
     {
+        Player.Died -= Cancel;
         StopAllCoroutines();
+        running = null;
         RestoreHands();
         if (IsExecuting && movement != null) { movement.Hold(false); movement.SetPlayerControlsEnabled(true); }
         IsExecuting = false;
         SetPrompt(false);
     }
 
+    /// <summary>Stop an execution part-way (the player died, the victim is gone) and give everything back.</summary>
+    public void Cancel()
+    {
+        if (!IsExecuting) return;
+        if (running != null) StopCoroutine(running);
+        running = null;
+        RestoreHands();
+        IsExecuting = false;
+        if (movement != null) { movement.Hold(false); movement.SetPlayerControlsEnabled(true); }
+        if (anim != null && anim.HasState(0, IdleHash)) anim.CrossFade(IdleHash, 0.15f, 0);   // the hands out of the execution clip
+        SetPrompt(false);
+    }
+
     void Update()
     {
-        if (IsExecuting) return;
+        if (IsExecuting || PauseMenu.Paused) return;
 
         candidate = FindTarget();
         SetPrompt(candidate != null);
@@ -77,7 +98,7 @@ public class PlayerExecution : MonoBehaviour
         ExecutionData data = PickExecution(victim.anim);
         if (data == null) return false;
 
-        StartCoroutine(Run(victim, data));
+        running = StartCoroutine(Run(victim, data));
         return true;
     }
 
@@ -134,10 +155,12 @@ public class PlayerExecution : MonoBehaviour
         goal.y = GroundY(goal, startPos.y, victim.transform);   // on the ground, not mid-jump (as it was animated)
         for (float t = 0f; t < data.alignTime; t += Time.deltaTime)
         {
+            if (Gone(victim, bone)) { Cancel(); yield break; }
             float k = Mathf.SmoothStep(0f, 1f, t / data.alignTime);
             movement.Teleport(Vector3.Lerp(startPos, goal, k), Vector3.Slerp(startLook, (bone.position - cam.position).normalized, k));
             yield return null;
         }
+        if (Gone(victim, bone)) { Cancel(); yield break; }
         movement.Teleport(goal, (bone.position - cam.position).normalized);
 
         // 2. both states start on the same frame with no blend, so they advance in lockstep
@@ -155,6 +178,7 @@ public class PlayerExecution : MonoBehaviour
         {
             yield return null;
             time += Time.deltaTime;
+            if (Gone(victim, bone)) { Cancel(); yield break; }
 
             while (next < events.Length && time >= events[next].time)
             {
@@ -172,11 +196,15 @@ public class PlayerExecution : MonoBehaviour
         if (!killed) Kill(victim, data, bone);
 
         // the player state blends back to Idle on its own (exit-time transition)
+        running = null;
         RestoreHands();
         IsExecuting = false;
         movement.Hold(false);
         movement.SetPlayerControlsEnabled(true);
     }
+
+    /// <summary>The victim (or the bone we follow) was destroyed under us.</summary>
+    static bool Gone(Shooter victim, Transform bone) => victim == null || bone == null;
 
     /// <summary>
     /// Where our feet go at <paramref name="at"/>: the ground under it (what we stand on: our ground layers,

@@ -86,6 +86,7 @@ public class WaveDirector : MonoBehaviour
     PlayerMovement movement;
     SunBurn sunBurn;
     PlayerBlock block;
+    PlayerExecution execution;
     WaveHUD hud;
     readonly List<Shooter> alive = new List<Shooter>();
     readonly List<(Shooter body, float sinkAt)> corpses = new List<(Shooter, float)>();
@@ -121,6 +122,7 @@ public class WaveDirector : MonoBehaviour
         movement = player != null ? player.GetComponent<PlayerMovement>() : null;
         sunBurn = player != null ? player.GetComponent<SunBurn>() : null;
         block = player != null ? player.GetComponent<PlayerBlock>() : null;
+        execution = player != null ? player.GetComponentInChildren<PlayerExecution>(true) : null;
         if (deathScreen == null && player != null) deathScreen = player.GetComponentInChildren<DeathScreen>(true);
         if (deathScreen != null) { deathScreen.Retry -= OnRetry; deathScreen.Retry += OnRetry; deathScreen.Hide(); }
         hud = FindAnyObjectByType<WaveHUD>(FindObjectsInactive.Include);
@@ -240,6 +242,7 @@ public class WaveDirector : MonoBehaviour
         toSpawn = 0;
         arriving.Clear();
         ClearArena();          // everyone gone at once (stopped enemies would just walk on the spot)
+        if (execution != null) execution.Cancel();   // first: it gives the controls back, then we hold the player
         // no dying again and again where you fell (the sun) while the run waits to start over
         if (sunBurn != null) sunBurn.enabled = false;
         if (movement != null && !movement.Held) movement.Hold(true);

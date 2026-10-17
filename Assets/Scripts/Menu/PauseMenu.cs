@@ -5,7 +5,8 @@ using UnityEngine.UI;
 /// <summary>
 /// Esc in the game: everything stops (time, the game's sound), the screen dims and RESUME / SETTINGS /
 /// MAIN MENU / QUIT come up with the cursor free. The player's input scripts are switched off while
-/// paused and put back exactly as they were. Esc again goes back (out of settings, then resumes).
+/// paused and put back exactly as they were (an execution keeps going: frozen time holds it, and its key is
+/// ignored while paused). Esc again goes back (out of settings, then resumes).
 /// Not while the death screen is up.
 /// </summary>
 public class PauseMenu : MonoBehaviour
@@ -44,7 +45,7 @@ public class PauseMenu : MonoBehaviour
         controls = new Behaviour[]
         {
             player.GetComponent<PlayerMovement>(), player.GetComponent<Player>(), player.GetComponent<PlayerBlock>(),
-            player.GetComponentInChildren<PlayerExecution>(true), player.GetComponentInChildren<HandSway>(true),
+            player.GetComponentInChildren<HandSway>(true),   // not PlayerExecution: switching it off cancels a running execution (it just ignores the key while paused)
         };
         Paused = false;
         shown = 0f;
