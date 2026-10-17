@@ -44,9 +44,21 @@ public class PlayerBlock : MonoBehaviour
     public float warnTime = 1.5f;           // indicator reaches full strength this close to impact
     public Color guardColor = Color.white;
     public Color blockFlashColor = new Color(0.5f, 0.8f, 1f);
-    public Color parryFlashColor = new Color(1f, 0.85f, 0.2f);
+    public Color parryFlashColor = Color.white;
+    public Color hitFlashColor = new Color(1f, 0.15f, 0.1f);
     public Color lockedColor = new Color(1f, 1f, 1f, 0.25f);   // guard while a missed parry recovers
     public float flashTime = 0.25f;
+    public float popScale = 0.28f;          // the guard arc pops this much bigger on a block / parry / hit
+    public float popTime = 0.2f;
+
+    [Header("Incoming look")]
+    // stake markers start small, thin and pale, and grow, thicken and darken as the stake closes in;
+    // inside the parry window they snap to a bright flash (the moment to right-click)
+    public Color incomingFar = new Color(1f, 0.45f, 0.45f, 0.35f);
+    public Color incomingNear = new Color(0.6f, 0.02f, 0.04f, 1f);
+    public Color parryCueColor = new Color(1f, 0.95f, 0.9f, 1f);
+    public float incomingScaleFar = 0.85f, incomingScaleNear = 1.12f, parryCueScale = 1.2f;
+    public float kickGrowTime = 0.3f;       // the kick marker swells over this (shorter than any wind-up, so it's no countdown)
 
     [HideInInspector] public bool isGuarding;
     [HideInInspector] public float guardAngle;
@@ -56,6 +68,7 @@ public class PlayerBlock : MonoBehaviour
     bool parryLanded;
     Collider body;
     float flashEndTime;
+    float popStartTime = float.NegativeInfinity;
     Color flashColor;
     readonly List<Image> incomingPool = new List<Image>();
 
@@ -207,6 +220,7 @@ public class PlayerBlock : MonoBehaviour
         else
         {
             player.TakeDamage(bullet.damage);
+            HitPop();
         }
 
         Destroy(bullet.gameObject);
@@ -233,7 +247,15 @@ public class PlayerBlock : MonoBehaviour
         guardArc.color = Time.time < flashEndTime ? flashColor
                        : BlockLocked ? lockedColor
                        : guardColor;
+
+        // pop on block / parry / hit: quick swell that settles back
+        float t = (Time.time - popStartTime) / Mathf.Max(popTime, 0.0001f);
+        float pop = t >= 0f && t < 1f ? popScale * (1f - t) * (1f - t) : 0f;
+        guardArc.rectTransform.localScale = Vector3.one * (1f + pop);
     }
+
+    /// <summary>Unblocked stake or kick landed: red pop on the guard arc.</summary>
+    public void HitPop() => Flash(hitFlashColor);
 
     void UpdateIncomingIndicators()
     {
@@ -255,13 +277,17 @@ public class PlayerBlock : MonoBehaviour
             Vector3 passPoint = bullet.transform.position + dir * along;
             Image arc = incomingPool[used++];
             arc.gameObject.SetActive(true);
-            PlaceArc(arc, BodyAngle(passPoint - Center), incomingArc);
 
-            // Fade in as it gets closer to impact
+            // build up as it closes in: grow, thicken, darken; flash inside the parry window
             float timeToImpact = along / bullet.Speed;
-            Color c = incomingTemplate.color;
-            c.a = Mathf.Lerp(1f, 0.25f, Mathf.Clamp01(timeToImpact / warnTime));
-            arc.color = c;
+            float k = 1f - Mathf.Clamp01(timeToImpact / warnTime);
+            k *= k;   // most of the build-up happens near the end
+            bool cue = timeToImpact <= parryWindow;
+            float width = Mathf.Lerp(incomingArc * 0.7f, incomingArc * 1.15f, k);
+            PlaceArc(arc, BodyAngle(passPoint - Center), width);
+            Color c = cue ? parryCueColor : Color.Lerp(incomingFar, incomingNear, k);
+            float scale = cue ? parryCueScale : Mathf.Lerp(incomingScaleFar, incomingScaleNear, k);
+            StyleArc(arc, c, scale, cue ? 1f : Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 1f, k)));
         }
 
         // kicks: an orange warning at the bottom of the ring for the whole wind-up, pulsing steadily
@@ -276,7 +302,9 @@ public class PlayerBlock : MonoBehaviour
             PlaceArc(arc, 180f, kickArc);
             Color c = kickColor;
             c.a = kickColor.a * Mathf.Lerp(0.55f, 1f, Mathf.PingPong(Time.time * kickPulseSpeed, 1f));
-            arc.color = c;
+            // swells to full size early in the wind-up (no countdown to the impact itself)
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(s.KickElapsed / Mathf.Max(kickGrowTime, 0.0001f)));
+            StyleArc(arc, c, Mathf.Lerp(incomingScaleFar, incomingScaleNear, k), k);
         }
 
         for (int i = used; i < incomingPool.Count; i++)
@@ -290,9 +318,26 @@ public class PlayerBlock : MonoBehaviour
         arc.rectTransform.localEulerAngles = new Vector3(0f, 0f, -(angle - width * 0.5f));
     }
 
+    /// <summary>Colour + size of an incoming marker; its Inner/Outer child rings fade in with
+    /// <paramref name="thick"/> to make the band thicker.</summary>
+    static void StyleArc(Image arc, Color color, float scale, float thick)
+    {
+        arc.color = color;
+        arc.rectTransform.localScale = Vector3.one * scale;
+        foreach (Transform child in arc.transform)
+        {
+            if (!child.TryGetComponent(out Image band)) continue;
+            band.fillAmount = arc.fillAmount;
+            Color c = color;
+            c.a *= thick;
+            band.color = c;
+        }
+    }
+
     void Flash(Color color)
     {
         flashColor = color;
         flashEndTime = Time.time + flashTime;
+        popStartTime = Time.time;
     }
 }

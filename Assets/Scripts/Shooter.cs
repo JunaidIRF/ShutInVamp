@@ -117,6 +117,8 @@ public class Shooter : MonoBehaviour
 
     /// <summary>Seconds until the current kick lands (only meaningful while in <see cref="Kicking"/>).</summary>
     public float KickTimeToImpact => kickImpactTime - Time.time;
+    /// <summary>Seconds since the current kick started winding up.</summary>
+    public float KickElapsed => kickWindup - KickTimeToImpact;
     float staggerEndTime;
     bool isStaggered;
     bool isDead;
@@ -617,6 +619,7 @@ public class Shooter : MonoBehaviour
         {
             var player = target.GetComponent<Player>();
             if (player != null) player.TakeDamage(kickDamage);
+            if (block != null) block.HitPop();
         }
 
         var move = target.GetComponent<PlayerMovement>();
