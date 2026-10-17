@@ -1896,7 +1896,7 @@ ParticleSystem:
       emitter: {fileID: 5148619629834119654}
       type: 1
       properties: 0
-      emitProbability: 1
+      emitProbability: 0.5
   LightsModule:
     enabled: 0
     ratio: 0
@@ -2563,8 +2563,8 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 3
       minMaxState: 3
-      scalar: 3.5
-      minScalar: 2.5
+      scalar: 7.5
+      minScalar: 5.5
       maxCurve:
         serializedVersion: 2
         m_Curve: []
@@ -2596,9 +2596,9 @@ ParticleSystem:
         m_RotationOrder: 4
     startColor:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 2
       minColor: {r: 1, g: 1, b: 1, a: 1}
-      maxColor: {r: 1, g: 1, b: 1, a: 1}
+      maxColor: {r: 0.7, g: 0.66, b: 0.66, a: 1}
       maxGradient:
         serializedVersion: 2
         key0: {r: 1, g: 1, b: 1, a: 1}
@@ -2663,7 +2663,7 @@ ParticleSystem:
       serializedVersion: 3
       minMaxState: 3
       scalar: 0.2
-      minScalar: 0.1
+      minScalar: 0.07
       maxCurve:
         serializedVersion: 2
         m_Curve: []
@@ -2763,9 +2763,9 @@ ParticleSystem:
         m_RotationOrder: 4
     randomizeRotationDirection: 0
     gravitySource: 0
-    maxNumParticles: 200
+    maxNumParticles: 300
     customEmitterVelocity: {x: 0, y: 0, z: 0}
-    size3D: 1
+    size3D: 0
     rotation3D: 1
     gravityModifier:
       serializedVersion: 3
@@ -2952,6 +2952,15 @@ ParticleSystem:
         m_Curve:
         - serializedVersion: 3
           time: 0
+          value: 0.3
+          inSlope: 0
+          outSlope: 20
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 0.05
           value: 1
           inSlope: 0
           outSlope: 0
@@ -2971,7 +2980,7 @@ ParticleSystem:
         - serializedVersion: 3
           time: 1
           value: 0
-          inSlope: 0
+          inSlope: -3
           outSlope: 0
           tangentMode: 0
           weightedMode: 0
@@ -4742,7 +4751,7 @@ ParticleSystemRenderer:
   m_GameObject: {fileID: 5400803989842593107}
   m_Enabled: 1
   m_CastShadows: 0
-  m_ReceiveShadows: 0
+  m_ReceiveShadows: 1
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
   m_MotionVectors: 1
@@ -4804,10 +4813,10 @@ ParticleSystemRenderer:
   m_VertexStreams: 00010304y
   m_UseCustomTrailVertexStreams: 0
   m_TrailVertexStreams: 00010304y
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
-  m_Mesh1: {fileID: 0}
-  m_Mesh2: {fileID: 0}
-  m_Mesh3: {fileID: 0}
+  m_Mesh: {fileID: 4300000, guid: 814aa8b3314042f4d8ebf1f22c575e35, type: 2}
+  m_Mesh1: {fileID: -4498498699457908325, guid: 814aa8b3314042f4d8ebf1f22c575e35, type: 2}
+  m_Mesh2: {fileID: -1289123733960493095, guid: 814aa8b3314042f4d8ebf1f22c575e35, type: 2}
+  m_Mesh3: {fileID: 1856847601733785585, guid: 814aa8b3314042f4d8ebf1f22c575e35, type: 2}
   m_MeshWeighting: 1
   m_MeshWeighting1: 1
   m_MeshWeighting2: 1
