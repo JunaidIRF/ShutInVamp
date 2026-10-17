@@ -253,13 +253,14 @@ public class Shooter : MonoBehaviour
         }
     }
 
-    /// <summary>The execution's kill moment: hand over to the ragdoll, nudged along <paramref name="direction"/>.</summary>
-    public void FinishExecution(Vector3 point, Vector3 direction)
+    /// <summary>The execution's kill moment: hand over to the ragdoll, pushed along <paramref name="direction"/>
+    /// (speeds are velocity changes in m/s, like the death knock-back).</summary>
+    public void FinishExecution(Vector3 point, Vector3 direction, float bodySpeed, float hitSpeed, float lift)
     {
         if (isDead) return;
         health = 0f;
         UpdateHealthBar();
-        Die(point, direction, 0.3f);
+        Die(point, direction, bodySpeed, hitSpeed, lift);
     }
 
     void UpdateHealthBar()
@@ -269,7 +270,9 @@ public class Shooter : MonoBehaviour
     }
 
     /// <summary>Go ragdoll, knocked along the killing shot. The shooter stays dead (no respawn yet).</summary>
-    void Die(Vector3 point, Vector3 direction, float knockScale = 1f)
+    void Die(Vector3 point, Vector3 direction) => Die(point, direction, deathKnockSpeed, deathHitSpeed, deathLift);
+
+    void Die(Vector3 point, Vector3 direction, float bodySpeed, float hitSpeed, float lift)
     {
         isDead = true;
         isExecuted = false;
@@ -286,7 +289,7 @@ public class Shooter : MonoBehaviour
 
         if (ownCollider != null) ownCollider.enabled = false;   // the ragdoll's own colliders take over
         if (healthFill != null) healthFill.canvas.gameObject.SetActive(false);
-        if (ragdoll != null) ragdoll.Activate(point, direction, deathKnockSpeed * knockScale, deathHitSpeed * knockScale, deathLift * knockScale);
+        if (ragdoll != null) ragdoll.Activate(point, direction, bodySpeed, hitSpeed, lift);
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>

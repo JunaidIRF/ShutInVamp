@@ -151,21 +151,28 @@ public class PlayerExecution : MonoBehaviour
             time += Time.deltaTime;
 
             while (next < events.Length && time >= events[next].time)
-                Fire(events[next++], victim, bone);
+            {
+                ExecutionData.Event e = events[next++];
+                Transform at = string.IsNullOrEmpty(e.bone) ? bone : FindDeep(victimAnim.transform, e.bone);
+                Fire(e, victim, at != null ? at : bone);
+            }
 
             if (!killed && time >= data.killTime)
             {
                 killed = true;
-                victim.FinishExecution(bone.position, BiteDirection(bone));
+                Kill(victim, data, bone);
             }
         }
-        if (!killed) victim.FinishExecution(bone.position, BiteDirection(bone));
+        if (!killed) Kill(victim, data, bone);
 
         // the player state blends back to Idle on its own (exit-time transition)
         RestoreHands();
         IsExecuting = false;
         movement.SetPlayerControlsEnabled(true);
     }
+
+    void Kill(Shooter victim, ExecutionData data, Transform bone) =>
+        victim.FinishExecution(bone.position, BiteDirection(bone), data.killBodySpeed, data.killHitSpeed, data.killLift);
 
     void Fire(ExecutionData.Event e, Shooter victim, Transform bone)
     {
