@@ -48,6 +48,14 @@ public static class ExecutionAnimEditing
         EditorApplication.update += Poll;
         EditorApplication.update += PreviewHands;
         AssemblyReloadEvents.beforeAssemblyReload += RestoreHands;   // the remembered layers don't survive a reload
+
+        EditorApplication.update += PreviewCuts;
+        SceneView.duringSceneGui += DrawCutLabels;
+        // the preview's meshes / stumps are never saved and must not outlive the stage
+        AssemblyReloadEvents.beforeAssemblyReload += RestoreCuts;
+        EditorSceneManager.sceneSaving += (scene, path) => RestoreCuts();   // put back for the save; the next check re-applies
+        EditorSceneManager.sceneClosing += (scene, removing) => RestoreCuts();
+        EditorApplication.playModeStateChanged += state => { if (state == PlayModeStateChange.ExitingEditMode) RestoreCuts(); };
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -98,6 +106,7 @@ public static class ExecutionAnimEditing
         }
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         ApplyNow();   // don't lose edits from a previous session
+        RestoreCuts();
 
         AnimationClip edit = BuildEditingClip(data, pc, ec);
         var ctrl = BuildRigController(edit);
@@ -301,6 +310,160 @@ public static class ExecutionAnimEditing
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
         PlayerExecution ex = prefab != null ? prefab.GetComponent<PlayerExecution>() : null;
         return ex != null ? ex.worldHandsLayer : 0;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  SEVER PREVIEW — from an event's marker on, the stage's enemy shows that part cut off: its mesh
+    //  without the part's triangles (the game's own rule, Dismemberment.WithoutParts) and a stump at the cut
+    // ══════════════════════════════════════════════════════════════════
+
+    const string CutMeshTag = " (cut preview)";
+    const string CutStumpName = "Cut preview";
+    static string cutKey = "";
+    static double nextCutCheck;
+    static readonly System.Collections.Generic.List<(SkinnedMeshRenderer smr, Mesh original)> cutMeshes = new System.Collections.Generic.List<(SkinnedMeshRenderer, Mesh)>();
+    static readonly System.Collections.Generic.List<(GameObject stump, string label)> cutStumps = new System.Collections.Generic.List<(GameObject, string)>();
+    static GUIStyle cutLabelStyle;
+
+    static void PreviewCuts()
+    {
+        if (EditorApplication.timeSinceStartup < nextCutCheck) return;
+        nextCutCheck = EditorApplication.timeSinceStartup + 0.05;
+
+        Transform enemy = null;
+        var cuts = new System.Collections.Generic.List<(string bone, float time)>();
+        if (!EditorApplication.isPlayingOrWillChangePlaymode && SceneManager.GetActiveScene().path == StagePath)
+        {
+            GameObject rig = SceneManager.GetActiveScene().GetRootGameObjects().FirstOrDefault(g => g.name == "Execution Rig");
+            enemy = rig != null ? rig.transform.Find(EnemyPrefix) : null;
+            ExecutionData data = EditingData;
+            AnimationClip edit = EditingClip;
+            AnimationWindow aw = Resources.FindObjectsOfTypeAll<AnimationWindow>().FirstOrDefault();
+            if (enemy != null && data != null && edit != null && aw != null && aw.previewing && aw.animationClip == edit)
+                cuts = CutsAt(data, aw.time);
+        }
+
+        string key = string.Join("|", cuts.Select(c => c.bone + "@" + c.time.ToString("F4")));
+        if (key == cutKey) return;
+        RestoreCuts();
+        if (cuts.Count > 0) ApplyCuts(enemy, cuts);
+        cutKey = key;
+        SceneView.RepaintAll();
+        UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+    }
+
+    /// <summary>Same rule as the game: every event at or before <paramref name="t"/> with a Sever bone has cut it.</summary>
+    static System.Collections.Generic.List<(string bone, float time)> CutsAt(ExecutionData data, float t)
+    {
+        var cuts = new System.Collections.Generic.List<(string, float)>();
+        if (data.events == null) return cuts;
+        foreach (var e in data.events.OrderBy(e => e.time))
+        {
+            if (e.time > t + 0.0001f) break;
+            if (!string.IsNullOrEmpty(e.sever) && !cuts.Any(c => c.Item1 == e.sever)) cuts.Add((e.sever, e.time));
+        }
+        return cuts;
+    }
+
+    static void ApplyCuts(Transform enemy, System.Collections.Generic.List<(string bone, float time)> cuts)
+    {
+        var d = enemy.GetComponent<Dismemberment>();
+        var found = new System.Collections.Generic.List<(Transform bone, string name, float time)>();
+        foreach (var (name, time) in cuts)
+        {
+            Transform bone = Dismemberment.FindDeep(enemy, name);
+            if (bone == null) { Debug.LogWarning($"Execution sever preview: no bone '{name}' on the enemy"); continue; }
+            if (d != null && !d.CanCut(bone)) { Debug.LogWarning($"Execution sever preview: '{name}' can't be cut (the root bone, or not one of the model's bones)"); continue; }
+            found.Add((bone, name, time));
+        }
+        if (found.Count == 0) return;
+        var bones = found.Select(f => f.bone).ToList();
+
+        // stumps first, measured on the whole mesh, at the outermost cuts (a cut inside a part that is cut off goes with it)
+        var bodyRenderer = enemy.GetComponentInChildren<SkinnedMeshRenderer>(true);
+        Material bodyMat = bodyRenderer != null ? bodyRenderer.sharedMaterial : null;
+        Color color = d != null ? d.stumpColor : new Color(0.35f, 0.02f, 0.03f);
+        foreach (var (bone, name, time) in found)
+        {
+            if (bones.Any(o => o != bone && bone.IsChildOf(o))) continue;
+            Dismemberment.CutPose(bone, out Vector3 point, out Vector3 along);
+            float size = d != null ? d.StumpSize(bone) : 0.08f;
+            GameObject stump = Dismemberment.MakeStump(bone.parent, point, along, size, bodyMat, color);
+            stump.name = CutStumpName;
+            stump.hideFlags = HideFlags.HideAndDontSave;
+            stump.GetComponent<MeshRenderer>().sharedMaterial.hideFlags = HideFlags.HideAndDontSave;
+            cutStumps.Add((stump, $"Cut: {Dismemberment.BoneLabel(name)}  ({time:F2} s)"));
+        }
+
+        foreach (var smr in enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            Mesh original = smr.sharedMesh;
+            if (original == null) continue;
+            if (!original.isReadable) { Debug.LogWarning($"Execution sever preview: '{original.name}' isn't Read/Write enabled"); continue; }
+            Mesh cut = Dismemberment.WithoutParts(smr, original, bones);
+            cut.name = original.name + CutMeshTag;
+            cut.hideFlags = HideFlags.HideAndDontSave;
+            cutMeshes.Add((smr, original));
+            smr.sharedMesh = cut;
+        }
+    }
+
+    /// <summary>The stage's enemy back to its real mesh, preview stumps gone. Safe to call any time.</summary>
+    static void RestoreCuts()
+    {
+        foreach (var (smr, original) in cutMeshes)
+        {
+            if (smr == null) continue;
+            Mesh shown = smr.sharedMesh;
+            smr.sharedMesh = original;
+            if (shown != null && shown != original && shown.name.EndsWith(CutMeshTag)) Object.DestroyImmediate(shown);
+        }
+        cutMeshes.Clear();
+        foreach (var (stump, _) in cutStumps) DestroyStump(stump);
+        cutStumps.Clear();
+        cutKey = "";
+
+        // after a script reload the lists above are empty: find leftovers in the stage itself
+        Scene stage = SceneManager.GetActiveScene();
+        if (stage.path != StagePath || !stage.isLoaded) return;
+        GameObject rig = stage.GetRootGameObjects().FirstOrDefault(g => g.name == "Execution Rig");
+        Transform enemy = rig != null ? rig.transform.Find(EnemyPrefix) : null;
+        if (enemy == null) return;
+        SkinnedMeshRenderer[] real = null;
+        foreach (var smr in enemy.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            if (smr.sharedMesh == null || !smr.sharedMesh.name.EndsWith(CutMeshTag)) continue;
+            if (real == null)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(EnemyPrefabPath);
+                real = prefab != null ? prefab.GetComponentsInChildren<SkinnedMeshRenderer>(true) : new SkinnedMeshRenderer[0];
+            }
+            SkinnedMeshRenderer same = real.FirstOrDefault(r => r.name == smr.name);
+            if (same == null) continue;
+            Mesh shown = smr.sharedMesh;
+            smr.sharedMesh = same.sharedMesh;
+            Object.DestroyImmediate(shown);
+        }
+        foreach (var t in enemy.GetComponentsInChildren<Transform>(true).Where(t => t.name == CutStumpName).ToArray())
+            DestroyStump(t.gameObject);
+    }
+
+    static void DestroyStump(GameObject stump)
+    {
+        if (stump == null) return;
+        var r = stump.GetComponent<MeshRenderer>();
+        if (r != null && r.sharedMaterial != null && r.sharedMaterial.hideFlags == HideFlags.HideAndDontSave) Object.DestroyImmediate(r.sharedMaterial);
+        Object.DestroyImmediate(stump);
+    }
+
+    /// <summary>A label at each cut in the Scene view, naming the bone and the marker's time.</summary>
+    static void DrawCutLabels(SceneView view)
+    {
+        if (cutStumps.Count == 0) return;
+        if (cutLabelStyle == null)
+            cutLabelStyle = new GUIStyle(EditorStyles.helpBox) { fontStyle = FontStyle.Bold, fontSize = 11, alignment = TextAnchor.MiddleCenter };
+        foreach (var (stump, label) in cutStumps)
+            if (stump != null) Handles.Label(stump.transform.position, label, cutLabelStyle);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -525,7 +688,7 @@ public class ExecutionDataEditor : Editor
             ExecutionAnimEditing.Open(data);
         if (editing)
         {
-            EditorGUILayout.HelpBox("Editing in ExecutionStage: select 'Execution Rig' in the Animation window. Changes copy to the game clips automatically. Markers: 'Kill' = kill time, every other marker = one event; set its Blood / Heal / Shake / Hands below (Hands: World = the enemy can cover them, Overlay = back on top; always back to Overlay at the end).", MessageType.Info);
+            EditorGUILayout.HelpBox("Editing in ExecutionStage: select 'Execution Rig' in the Animation window. Changes copy to the game clips automatically. Markers: 'Kill' = kill time, every other marker = one event; set its Blood / Heal / Shake / Hands / Sever below (Hands: World = the enemy can cover them, Overlay = back on top; always back to Overlay at the end). Sever: pick a bone (drag it in from the stage's Enemy) and that bone with everything under it is cut off at that marker; scrub past the marker and the stage shows the part gone, a stump and a label at the cut.", MessageType.Info);
             if (GUILayout.Button("Apply to game clips now")) ExecutionAnimEditing.ApplyNow();
         }
 

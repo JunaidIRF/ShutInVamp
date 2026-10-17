@@ -6,13 +6,15 @@ using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Cuts parts (head, arms, legs) off a skinned enemy model. The skinned mesh is split by bone weights
-/// (everything weighted mostly to the part's bone or its children), so it works for any rig: the body keeps
-/// skinning without the part, the part becomes a physics object, both ends get a stump and the wound spurts
-/// blood. Needs the model's mesh to be Read/Write enabled. Call after the ragdoll is on.
+/// Cuts parts off a skinned enemy model: any bone, with everything under it. The skinned mesh is split by
+/// bone weights (triangles weighted mostly to the bone or its children go), so it works for any rig: the
+/// body keeps skinning without the part, the part becomes a physics object, both ends get a stump and the
+/// wound spurts blood. Works on a living (animated) model too, e.g. from an execution event. Needs the
+/// model's mesh to be Read/Write enabled.
 /// </summary>
 public class Dismemberment : MonoBehaviour
 {
+    /// <summary>A part a claw blow can cut off (and tuned stump size / weight for that bone).</summary>
     [Serializable]
     public class Part
     {
@@ -34,7 +36,7 @@ public class Dismemberment : MonoBehaviour
     public float maxHitDistance = 0.35f;
 
     [Header("Severed part")]
-    [FormerlySerializedAs("headSpeed")] public float pieceSpeed = 4f;        // m/s along the killing blow
+    [FormerlySerializedAs("headSpeed")] public float pieceSpeed = 4f;        // m/s along the blow
     [FormerlySerializedAs("headLift")] public float pieceLift = 3f;          // m/s upward
     [FormerlySerializedAs("headSpin")] public float pieceSpin = 8f;          // rad/s, random axis
     [FormerlySerializedAs("headLifetime")] public float pieceLifetime = 20f;
@@ -50,11 +52,31 @@ public class Dismemberment : MonoBehaviour
     [FormerlySerializedAs("headSpurtStrength")] public float pieceSpurtStrength = 0.6f;
     public float bloodLifetime = 9f;
 
-    readonly HashSet<Part> severed = new HashSet<Part>();
+    readonly List<Transform> severed = new List<Transform>();                  // bones cut off so far
+    readonly List<(Transform bone, GameObject go)> wounds = new List<(Transform, GameObject)>();   // stumps / jets on the body
+    readonly List<Collider> pieces = new List<Collider>();                     // severed parts still around
 
-    public bool IsSevered(string partName) { var p = Find(partName); return p != null && severed.Contains(p); }
+    void OnEnable()
+    {
+        severed.Clear();
+        wounds.Clear();
+        pieces.Clear();
+    }
 
-    void OnEnable() => severed.Clear();
+    // a living model's Animator would bring a cut bone's scale back
+    void LateUpdate()
+    {
+        foreach (var b in severed)
+            if (b != null) b.localScale = Vector3.zero;
+    }
+
+    /// <summary>True if <paramref name="bone"/> (or a bone above it) has been cut off.</summary>
+    public bool IsCut(Transform bone)
+    {
+        foreach (var b in severed)
+            if (b != null && bone != null && (bone == b || bone.IsChildOf(b))) return true;
+        return false;
+    }
 
     public Part Find(string partName) => parts.Find(p => p.name == partName);
 
@@ -67,15 +89,14 @@ public class Dismemberment : MonoBehaviour
         if (direction.sqrMagnitude < 0.0001f) return null;
         direction.Normalize();
         var bones = new Dictionary<Part, Transform>();
-        foreach (var p in parts) { var t = FindDeep(transform, p.bone); if (t != null) bones[p] = t; }
+        foreach (var p in parts) { var t = FindDeep(transform, p.bone); if (t != null && !IsCut(t)) bones[p] = t; }
 
-        var smr = GetComponentInChildren<SkinnedMeshRenderer>();
-        Transform root = smr != null && smr.rootBone != null ? smr.rootBone : transform;
+        Transform root = RootBone();
         Part best = null;
         float bestDistance = maxHitDistance;
         foreach (var t in root.GetComponentsInChildren<Transform>())
         {
-            if (t == root || t.GetComponent<Renderer>() != null) continue;   // bones only (no stumps / effects)
+            if (t == root || t.GetComponent<Renderer>() != null || IsCut(t)) continue;   // bones only (no stumps / effects)
             // the segment from the parent joint to this one belongs to the part this bone is in
             float d = LineToSegment(point, direction, t.parent.position, t.position);
             if (d >= bestDistance) continue;
@@ -94,26 +115,28 @@ public class Dismemberment : MonoBehaviour
         return p != null && Sever(p, direction);
     }
 
+    /// <summary>Cuts off the part named <paramref name="partName"/> (e.g. "Head").</summary>
     public bool Sever(string partName, Vector3 direction)
     {
         Part p = Find(partName);
         return p != null && Sever(p, direction);
     }
 
-    public bool Sever(Part part, Vector3 direction)
+    public bool Sever(Part part, Vector3 direction) => part != null && Sever(FindDeep(transform, part.bone), direction);
+
+    /// <summary>Cuts the body off at the bone named <paramref name="boneName"/> (it and everything under it).</summary>
+    public bool SeverBone(string boneName, Vector3 direction) => Sever(FindDeep(transform, boneName), direction);
+
+    /// <summary>Cuts the body off at <paramref name="bone"/>: it and everything under it fly off.</summary>
+    public bool Sever(Transform bone, Vector3 direction)
     {
-        if (part == null || severed.Contains(part)) return false;
-        Transform bone = FindDeep(transform, part.bone);
-        if (bone == null || bone.parent == null) return false;
+        if (!CanCut(bone) || IsCut(bone)) return false;
         if (bloodFx == null) { var s = GetComponentInParent<Shooter>(); if (s != null) bloodFx = s.bloodFx; }
 
-        // where it comes off: at the joint, the cut facing along the part (out of the body)
-        Transform stumpParent = bone.parent;
-        Vector3 cutPoint = Vector3.Lerp(stumpParent.position, bone.position, 0.85f);
-        Transform next = null;
-        foreach (Transform c in bone) if (c.GetComponent<Renderer>() == null) { next = c; break; }
-        Vector3 along = next != null ? next.position - bone.position : bone.position - stumpParent.position;
-        along = along.sqrMagnitude > 0.000001f ? along.normalized : Vector3.up;
+        CutPose(bone, out Vector3 cutPoint, out Vector3 along);
+        Part tuned = parts.Find(p => p.bone == bone.name);
+        string partName = tuned != null ? tuned.name : BoneLabel(bone.name);
+        float stumpSize = tuned != null ? tuned.stumpSize : 0f;
 
         var renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
         var done = new Dictionary<Mesh, Mesh>();   // original -> body (HitFlash overlays share the mesh)
@@ -128,23 +151,8 @@ public class Dismemberment : MonoBehaviour
             if (!original.isReadable) { Debug.LogWarning($"Dismemberment: '{original.name}' isn't Read/Write enabled"); continue; }
             if (!smr.enabled || smr.name.Contains("HitFlash")) continue;   // overlays get the body mesh above / below
 
-            // how much of each vertex follows the part (its bone + everything under it)
-            var partBones = new HashSet<int>();
-            for (int b = 0; b < smr.bones.Length; b++)
-                if (smr.bones[b] != null && (smr.bones[b] == bone || smr.bones[b].IsChildOf(bone))) partBones.Add(b);
-            if (partBones.Count == 0) continue;
-            var weights = original.boneWeights;
-            var share = new float[weights.Length];
-            for (int v = 0; v < weights.Length; v++)
-            {
-                var w = weights[v];
-                float sum = 0f;
-                if (partBones.Contains(w.boneIndex0)) sum += w.weight0;
-                if (partBones.Contains(w.boneIndex1)) sum += w.weight1;
-                if (partBones.Contains(w.boneIndex2)) sum += w.weight2;
-                if (partBones.Contains(w.boneIndex3)) sum += w.weight3;
-                share[v] = sum;
-            }
+            float[] share = PartShare(smr, original, new[] { bone });
+            if (share == null) continue;
 
             // pose right now, for the severed part. Baked without the renderer's scale, the vertices are already
             // world-sized in the renderer's position/rotation (the piece gets scale 1)
@@ -155,7 +163,7 @@ public class Dismemberment : MonoBehaviour
             Destroy(baked);
 
             body = Instantiate(original);
-            body.name = original.name + " (no " + part.name + ")";
+            body.name = original.name + " (no " + partName + ")";
             // the piece keeps only the vertices its triangles use (so its bounds / collider fit it)
             var remap = new Dictionary<int, int>();
             var pv = new List<Vector3>(); var pn = new List<Vector3>(); var puv = new List<Vector2>();
@@ -168,8 +176,7 @@ public class Dismemberment : MonoBehaviour
                 var cut = new List<int>();
                 for (int i = 0; i < tris.Length; i += 3)
                 {
-                    float avg = (share[tris[i]] + share[tris[i + 1]] + share[tris[i + 2]]) / 3f;
-                    if (avg <= 0.5f) { keep.Add(tris[i]); keep.Add(tris[i + 1]); keep.Add(tris[i + 2]); continue; }
+                    if (!IsPartTriangle(share, tris[i], tris[i + 1], tris[i + 2])) { keep.Add(tris[i]); keep.Add(tris[i + 1]); keep.Add(tris[i + 2]); continue; }
                     for (int k = 0; k < 3; k++)
                     {
                         int v = tris[i + k];
@@ -189,7 +196,7 @@ public class Dismemberment : MonoBehaviour
                 pieceTris += cut.Count / 3;
             }
             if (pieceTris == 0) { Destroy(body); continue; }
-            var pieceMesh = new Mesh { name = original.name + " (" + part.name + ")" };
+            var pieceMesh = new Mesh { name = original.name + " (" + partName + ")" };
             pieceMesh.SetVertices(pv);
             pieceMesh.SetNormals(pn);
             pieceMesh.SetUVs(0, puv);
@@ -200,14 +207,28 @@ public class Dismemberment : MonoBehaviour
             smr.sharedMesh = body;
             any = true;
 
-            piece = SpawnPiece(part, pieceMesh, smr, direction, cutPoint, along);
+            if (stumpSize <= 0f)
+            {
+                var world = new Vector3[bakedV.Length];
+                for (int v = 0; v < world.Length; v++) world[v] = smr.transform.position + smr.transform.rotation * bakedV[v];
+                stumpSize = MeasureStump(world, share, cutPoint, along);
+            }
+            float mass = tuned != null ? tuned.mass : Mathf.Clamp(pieceMesh.bounds.size.x * pieceMesh.bounds.size.y * pieceMesh.bounds.size.z * 500f, 0.5f, 25f);
+            piece = SpawnPiece(partName, mass, stumpSize, pieceMesh, smr, direction, cutPoint, along);
         }
         if (!any) return false;
         // hidden overlay copies that were skipped above
         foreach (var smr in renderers)
             if (smr.sharedMesh != null && done.TryGetValue(smr.sharedMesh, out Mesh b)) smr.sharedMesh = b;
 
-        severed.Add(part);
+        severed.Add(bone);
+
+        // stumps / jets from an earlier cut further down this part go with it
+        for (int i = wounds.Count - 1; i >= 0; i--)
+        {
+            var (at, go) = wounds[i];
+            if (go == null || at == null || at == bone || at.IsChildOf(bone)) { if (go != null) Destroy(go); wounds.RemoveAt(i); }
+        }
 
         // the body's ragdoll lets go of the part (an invisible limb would still swing, bump and drag),
         // then the bones collapse so nothing is left to see
@@ -221,14 +242,30 @@ public class Dismemberment : MonoBehaviour
         bone.localScale = Vector3.zero;
 
         // stump, a splash at the cut, then the wound pumps blood out in pulses
-        Stump(stumpParent, cutPoint, along, part.stumpSize);
+        Transform stumpParent = bone.parent;
+        wounds.Add((stumpParent, MakeStump(stumpParent, cutPoint, along, stumpSize, BodyMaterial(), stumpColor)));
         if (bloodFx != null) Destroy(Instantiate(bloodFx, cutPoint, Quaternion.LookRotation(along)), bloodLifetime);
-        StartCoroutine(Spurt(stumpParent, cutPoint, along, spurts, 1f));
-        if (piece != null) StartCoroutine(Spurt(piece, cutPoint, -along, pieceSpurts, pieceSpurtStrength));
+        StartCoroutine(Spurt(stumpParent, cutPoint, along, spurts, 1f, true));
+        if (piece != null) StartCoroutine(Spurt(piece, cutPoint, -along, pieceSpurts, pieceSpurtStrength, false));
         return true;
     }
 
-    Transform SpawnPiece(Part part, Mesh mesh, SkinnedMeshRenderer source, Vector3 direction, Vector3 cutPoint, Vector3 along)
+    /// <summary>
+    /// Keeps the severed parts from colliding with the body they came off. Call again when the body's
+    /// colliders change (the ragdoll switching on): re-enabled colliders forget ignored pairs.
+    /// </summary>
+    public void IgnoreBody()
+    {
+        pieces.RemoveAll(p => p == null);
+        if (pieces.Count == 0) return;
+        Shooter owner = GetComponentInParent<Shooter>();
+        Transform root = owner != null ? owner.transform : transform;
+        foreach (var c in root.GetComponentsInChildren<Collider>())
+            if (c.enabled)   // ignoring a disabled collider is an error
+                foreach (var p in pieces) Physics.IgnoreCollision(p, c);
+    }
+
+    Transform SpawnPiece(string partName, float mass, float stumpSize, Mesh mesh, SkinnedMeshRenderer source, Vector3 direction, Vector3 cutPoint, Vector3 along)
     {
         // centre the mesh on its pivot, so the rigidbody spins around the piece itself
         Vector3 centre = mesh.bounds.center;
@@ -237,7 +274,7 @@ public class Dismemberment : MonoBehaviour
         mesh.vertices = verts;
         mesh.RecalculateBounds();
 
-        var go = new GameObject("Severed " + part.name);
+        var go = new GameObject("Severed " + partName);
         go.layer = source.gameObject.layer;
         // baked vertices are world-sized in the renderer's position / rotation
         go.transform.SetPositionAndRotation(source.transform.position + source.transform.rotation * centre, source.transform.rotation);
@@ -251,10 +288,7 @@ public class Dismemberment : MonoBehaviour
         col.size = mesh.bounds.size * 0.9f;
 
         var rb = go.AddComponent<Rigidbody>();
-        // don't get stuck in (or launched by) the body it came off. After the rigidbody: adding one rebuilds
-        // the collider, which forgets ignored pairs
-        foreach (var c in GetComponentsInChildren<Collider>()) Physics.IgnoreCollision(col, c);
-        rb.mass = part.mass;
+        rb.mass = mass;
         rb.linearDamping = 0.2f;
         rb.angularDamping = 1.5f;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
@@ -263,45 +297,34 @@ public class Dismemberment : MonoBehaviour
         rb.linearVelocity = dir * pieceSpeed + Vector3.up * pieceLift;
         rb.angularVelocity = Random.onUnitSphere * pieceSpin;
 
+        // don't get stuck in (or launched by) the body it came off. After the rigidbody: adding one rebuilds
+        // the collider, which forgets ignored pairs
+        pieces.Add(col);
+        IgnoreBody();
+
         // a red cap where it came off
-        Stump(go.transform, cutPoint, -along, part.stumpSize);
+        MakeStump(go.transform, cutPoint, -along, stumpSize, BodyMaterial(), stumpColor);
 
         Destroy(go, pieceLifetime);
         return go.transform;
     }
 
-    /// <summary>A flattened dark-red cap at <paramref name="worldPos"/>, its flat side facing <paramref name="normal"/>.</summary>
-    void Stump(Transform parent, Vector3 worldPos, Vector3 normal, float size)
+    Material BodyMaterial()
     {
-        var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        s.name = "Stump";
-        DestroyImmediate(s.GetComponent<Collider>());   // a deferred destroy would join the piece's rigidbody for a step
-        s.layer = parent.gameObject.layer;
-        s.transform.SetParent(parent, false);
-        s.transform.position = worldPos;
-        s.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal);
-        Vector3 ls = parent.lossyScale;
-        float k = size / Mathf.Max(Mathf.Abs(ls.x), 0.0001f);
-        s.transform.localScale = new Vector3(k, k * 0.45f, k);
-        var r = s.GetComponent<MeshRenderer>();
         var src = GetComponentInChildren<SkinnedMeshRenderer>();
-        var mat = new Material(src != null && src.sharedMaterial != null ? src.sharedMaterial : r.sharedMaterial);
-        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", stumpColor);
-        if (mat.HasProperty("_Color")) mat.SetColor("_Color", stumpColor);
-        if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
-        if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.6f);
-        r.sharedMaterial = mat;
+        return src != null ? src.sharedMaterial : null;
     }
 
     /// <summary>
-    /// The jet rides on <paramref name="parent"/> (the ragdoll bone at the wound, or the flying part), so it
-    /// keeps pointing out of the wound as that tumbles; its drops fly free in world space.
+    /// The jet rides on <paramref name="parent"/> (the bone at the wound, or the flying part), so it keeps
+    /// pointing out of the wound as that moves; its drops fly free in world space.
     /// </summary>
-    IEnumerator Spurt(Transform parent, Vector3 at, Vector3 dir, int pulses, float strength)
+    IEnumerator Spurt(Transform parent, Vector3 at, Vector3 dir, int pulses, float strength, bool onBody)
     {
         if (jetFx == null || pulses <= 0) yield break;
         var fx = Instantiate(jetFx, at, Quaternion.LookRotation(dir));
         fx.transform.SetParent(parent, true);
+        if (onBody) wounds.Add((parent, fx));
         var ps = fx.GetComponent<ParticleSystem>();
         var main = ps.main;
         float speed = main.startSpeedMultiplier;
@@ -319,6 +342,148 @@ public class Dismemberment : MonoBehaviour
         if (fx != null) Destroy(fx, bloodLifetime);
     }
 
+    Transform RootBone()
+    {
+        var smr = GetComponentInChildren<SkinnedMeshRenderer>();
+        return smr != null && smr.rootBone != null ? smr.rootBone : transform;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  SHARED WITH THE EDITOR PREVIEW — the Animate stage shows cuts with exactly these rules
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>A bone that can be cut: one of this model's bones below the root bone.</summary>
+    public bool CanCut(Transform bone)
+    {
+        if (bone == null || bone.parent == null || !bone.IsChildOf(transform)) return false;
+        Transform root = RootBone();
+        return bone != root && bone.IsChildOf(root);
+    }
+
+    /// <summary>Where <paramref name="bone"/> comes off: by its joint, the cut facing along the part (out of the body).</summary>
+    public static void CutPose(Transform bone, out Vector3 point, out Vector3 along)
+    {
+        Transform parent = bone.parent;
+        point = Vector3.Lerp(parent.position, bone.position, 0.85f);
+        Transform next = null;
+        foreach (Transform c in bone) if (c.GetComponent<Renderer>() == null) { next = c; break; }
+        along = next != null ? next.position - bone.position : bone.position - parent.position;
+        along = along.sqrMagnitude > 0.000001f ? along.normalized : Vector3.up;
+    }
+
+    /// <summary>How much of each vertex follows <paramref name="bones"/> (each with everything under it). Null if none do.</summary>
+    public static float[] PartShare(SkinnedMeshRenderer smr, Mesh mesh, IList<Transform> bones)
+    {
+        var partBones = new HashSet<int>();
+        Transform[] smrBones = smr.bones;
+        for (int b = 0; b < smrBones.Length; b++)
+        {
+            if (smrBones[b] == null) continue;
+            foreach (var bone in bones)
+                if (bone != null && (smrBones[b] == bone || smrBones[b].IsChildOf(bone))) { partBones.Add(b); break; }
+        }
+        if (partBones.Count == 0) return null;
+        var weights = mesh.boneWeights;
+        var share = new float[weights.Length];
+        for (int v = 0; v < weights.Length; v++)
+        {
+            var w = weights[v];
+            float sum = 0f;
+            if (partBones.Contains(w.boneIndex0)) sum += w.weight0;
+            if (partBones.Contains(w.boneIndex1)) sum += w.weight1;
+            if (partBones.Contains(w.boneIndex2)) sum += w.weight2;
+            if (partBones.Contains(w.boneIndex3)) sum += w.weight3;
+            share[v] = sum;
+        }
+        return share;
+    }
+
+    /// <summary>A triangle goes with the part when its corners follow the part more than half on average.</summary>
+    public static bool IsPartTriangle(float[] share, int a, int b, int c) => (share[a] + share[b] + share[c]) / 3f > 0.5f;
+
+    /// <summary>A copy of <paramref name="mesh"/> without the triangles that go with <paramref name="bones"/> (same rule as a cut).</summary>
+    public static Mesh WithoutParts(SkinnedMeshRenderer smr, Mesh mesh, IList<Transform> bones)
+    {
+        float[] share = PartShare(smr, mesh, bones);
+        var body = Instantiate(mesh);
+        if (share == null) return body;
+        for (int sm = 0; sm < mesh.subMeshCount; sm++)
+        {
+            var tris = mesh.GetTriangles(sm);
+            var keep = new List<int>(tris.Length);
+            for (int i = 0; i < tris.Length; i += 3)
+                if (!IsPartTriangle(share, tris[i], tris[i + 1], tris[i + 2])) { keep.Add(tris[i]); keep.Add(tris[i + 1]); keep.Add(tris[i + 2]); }
+            body.SetTriangles(keep, sm);
+        }
+        return body;
+    }
+
+    /// <summary>The stump size for a cut at <paramref name="bone"/>: the part's setting, else measured from the posed mesh.</summary>
+    public float StumpSize(Transform bone)
+    {
+        Part tuned = parts.Find(p => p.bone == bone.name);
+        if (tuned != null) return tuned.stumpSize;
+        var smr = GetComponentInChildren<SkinnedMeshRenderer>();
+        if (smr == null || smr.sharedMesh == null || !smr.sharedMesh.isReadable) return 0.08f;
+        float[] share = PartShare(smr, smr.sharedMesh, new[] { bone });
+        if (share == null) return 0.08f;
+        var baked = new Mesh();
+        smr.BakeMesh(baked, false);
+        Vector3[] v = baked.vertices;
+        DestroyImmediate(baked);
+        for (int i = 0; i < v.Length; i++) v[i] = smr.transform.position + smr.transform.rotation * v[i];
+        CutPose(bone, out Vector3 point, out Vector3 along);
+        return MeasureStump(v, share, point, along);
+    }
+
+    /// <summary>Width of the part just past the cut (posed world vertices), so the stump covers the wound.</summary>
+    static float MeasureStump(Vector3[] world, float[] share, Vector3 cutPoint, Vector3 along)
+    {
+        var radii = new List<float>();
+        for (int i = 0; i < world.Length && i < share.Length; i++)
+        {
+            if (share[i] <= 0.5f) continue;
+            Vector3 o = world[i] - cutPoint;
+            float h = Vector3.Dot(o, along);
+            if (h < -0.02f || h > 0.05f) continue;
+            radii.Add((o - along * h).magnitude);
+        }
+        if (radii.Count == 0) return 0.08f;
+        radii.Sort();
+        return Mathf.Clamp(radii[(int)(radii.Count * 0.75f)] * 2f, 0.03f, 0.4f);
+    }
+
+    /// <summary>A flattened dark-red cap at <paramref name="worldPos"/>, its flat side facing <paramref name="normal"/>.</summary>
+    public static GameObject MakeStump(Transform parent, Vector3 worldPos, Vector3 normal, float size, Material bodyMaterial, Color color)
+    {
+        var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        s.name = "Stump";
+        DestroyImmediate(s.GetComponent<Collider>());   // a deferred destroy would join the piece's rigidbody for a step
+        s.layer = parent.gameObject.layer;
+        s.transform.SetParent(parent, false);
+        s.transform.position = worldPos;
+        s.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal);
+        Vector3 ls = parent.lossyScale;
+        float k = size / Mathf.Max(Mathf.Abs(ls.x), 0.0001f);
+        s.transform.localScale = new Vector3(k, k * 0.45f, k);
+        var r = s.GetComponent<MeshRenderer>();
+        var mat = new Material(bodyMaterial != null ? bodyMaterial : r.sharedMaterial);
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+        if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+        if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
+        if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.6f);
+        r.sharedMaterial = mat;
+        return s;
+    }
+
+    /// <summary>"mixamorig:LeftForeArm" -> "LeftForeArm".</summary>
+    public static string BoneLabel(string boneName)
+    {
+        if (string.IsNullOrEmpty(boneName)) return "";
+        int colon = boneName.LastIndexOf(':');
+        return colon >= 0 ? boneName.Substring(colon + 1) : boneName;
+    }
+
     /// <summary>Closest distance between the line through <paramref name="p"/> along unit <paramref name="d"/> and segment ab.</summary>
     static float LineToSegment(Vector3 p, Vector3 d, Vector3 a, Vector3 b)
     {
@@ -331,7 +496,7 @@ public class Dismemberment : MonoBehaviour
         return (off - d * Vector3.Dot(off, d)).magnitude;   // ...and its distance from the line
     }
 
-    static Transform FindDeep(Transform root, string name)
+    public static Transform FindDeep(Transform root, string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
         if (root.name == name) return root;

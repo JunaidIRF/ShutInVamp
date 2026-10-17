@@ -177,6 +177,11 @@ public class PlayerExecution : MonoBehaviour
     void Fire(ExecutionData.Event e, Shooter victim, Transform bone)
     {
         if (e.blood) victim.Bleed(bone.position, BiteDirection(bone));
+        if (!string.IsNullOrEmpty(e.sever))
+        {
+            Transform cut = FindDeep(victim.anim.transform, e.sever);
+            if (cut != null) victim.Sever(e.sever, BiteDirection(cut));   // flies off away from us
+        }
         if (e.shake > 0f && juice != null) juice.Shake(e.shake, e.shakeTime);
         if (e.heal > 0f && player != null) player.Heal(e.heal);
         if (e.hands == ExecutionData.HandsLayer.World) SetHandsWorld();

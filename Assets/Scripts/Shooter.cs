@@ -777,6 +777,13 @@ public class Shooter : MonoBehaviour
         if (decapitate) { var cut = FindDismemberment(); if (cut != null) cut.Sever("Head", direction); }
     }
 
+    /// <summary>Cuts the body off at the bone named <paramref name="boneName"/> (alive or dead), if the model has a Dismemberment.</summary>
+    public bool Sever(string boneName, Vector3 direction)
+    {
+        var cut = FindDismemberment();
+        return cut != null && cut.SeverBone(boneName, direction);
+    }
+
     Dismemberment FindDismemberment()
     {
         Dismemberment d = anim != null ? anim.GetComponent<Dismemberment>() : null;
@@ -815,6 +822,9 @@ public class Shooter : MonoBehaviour
         if (ownCollider != null) ownCollider.enabled = false;   // the ragdoll's own colliders take over
         if (healthFill != null) healthFill.canvas.gameObject.SetActive(false);
         if (ragdoll != null) ragdoll.Activate(point, direction, bodySpeed, hitSpeed, lift);
+        // parts cut off before death (execution events) must not collide with the ragdoll's colliders now on
+        var cut = FindDismemberment();
+        if (cut != null) cut.IgnoreBody();
     }
 
     /// <summary>Squash-and-stretch on the visual only: squash on impact, overshoot, settle. Feet stay planted.</summary>
