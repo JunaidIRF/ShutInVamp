@@ -4,6 +4,11 @@ using UnityEngine.UI;
 public class Player : MonoBehaviour
 {
     public static Player Instance {  get; private set; }
+    /// <summary>Health hit 0 (the wave director ends the run; without one we just refill).</summary>
+    public static event System.Action Died;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() => Died = null;   // no domain reload: drop last session's listeners
     public string attackName = "Fist";
     public int lastAttack = 1;
     public Animator anim;
@@ -104,9 +109,12 @@ public class Player : MonoBehaviour
         health = Mathf.Max(health - dmg, 0f);
         if (hurt != null && dmg > 0f) hurt.Hit(dmg);
 
-        // No death for now — refill so we can keep practicing
+        // dying is the wave director's business (run over); we refill either way
         if (health <= 0f)
+        {
             health = maxHealth;
+            Died?.Invoke();
+        }
 
         UpdateHealthBar();
     }
