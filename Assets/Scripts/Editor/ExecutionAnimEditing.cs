@@ -46,6 +46,8 @@ public static class ExecutionAnimEditing
     static ExecutionAnimEditing()
     {
         EditorApplication.update += Poll;
+        EditorApplication.update += PreviewHands;
+        AssemblyReloadEvents.beforeAssemblyReload += RestoreHands;   // the remembered layers don't survive a reload
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -115,6 +117,8 @@ public static class ExecutionAnimEditing
         SessionState.SetString(SessionClip, AssetDatabase.GetAssetPath(edit));
         SessionState.SetString(SessionData, AssetDatabase.GetAssetPath(data));
         lastDirty = EditorUtility.GetDirtyCount(edit);
+        handsWorld = false;
+        handLayers.Clear();
 
         Selection.activeGameObject = rig;
         var aw = EditorWindow.GetWindow<AnimationWindow>();
@@ -220,6 +224,83 @@ public static class ExecutionAnimEditing
         var cap = go.GetComponent<CapsuleCollider>();
         if (cap != null) return (cap.height * 0.5f - cap.center.y) * go.transform.lossyScale.y;
         return 0f;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  HANDS LAYER PREVIEW — the stage's hands follow the events' Hands setting at the Animation window's time
+    // ══════════════════════════════════════════════════════════════════
+
+    static bool handsWorld;
+    static double nextHandsCheck;
+    static readonly System.Collections.Generic.List<(GameObject go, int layer)> handLayers = new System.Collections.Generic.List<(GameObject, int)>();
+
+    static void PreviewHands()
+    {
+        if (EditorApplication.timeSinceStartup < nextHandsCheck) return;
+        nextHandsCheck = EditorApplication.timeSinceStartup + 0.05;
+
+        bool want = false;
+        Transform player = null;
+        if (!EditorApplication.isPlayingOrWillChangePlaymode && SceneManager.GetActiveScene().path == StagePath)
+        {
+            GameObject rig = SceneManager.GetActiveScene().GetRootGameObjects().FirstOrDefault(g => g.name == "Execution Rig");
+            player = rig != null ? rig.transform.Find(PlayerPrefix) : null;
+            ExecutionData data = EditingData;
+            AnimationClip edit = EditingClip;
+            AnimationWindow aw = Resources.FindObjectsOfTypeAll<AnimationWindow>().FirstOrDefault();
+            if (player != null && data != null && edit != null && aw != null && aw.previewing && aw.animationClip == edit)
+                want = HandsWorldAt(data, aw.time);
+        }
+        if (want == handsWorld) return;
+        handsWorld = want;
+
+        if (want)
+        {
+            handLayers.Clear();
+            int layer = WorldHandsLayer();
+            foreach (string name in new[] { "RHand", "LHand" })
+            {
+                Transform hand = player.Find(name);
+                if (hand == null) continue;
+                foreach (Transform t in hand.GetComponentsInChildren<Transform>(true))
+                {
+                    handLayers.Add((t.gameObject, t.gameObject.layer));
+                    t.gameObject.layer = layer;
+                }
+            }
+        }
+        else RestoreHands();
+        SceneView.RepaintAll();
+        UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+    }
+
+    static void RestoreHands()
+    {
+        foreach (var (go, layer) in handLayers)
+            if (go != null) go.layer = layer;
+        handLayers.Clear();
+        handsWorld = false;
+    }
+
+    /// <summary>Same rule as the game: the last event at or before <paramref name="t"/> with a Hands setting wins.</summary>
+    static bool HandsWorldAt(ExecutionData data, float t)
+    {
+        bool world = false;
+        if (data.events == null) return false;
+        foreach (var e in data.events.OrderBy(e => e.time))
+        {
+            if (e.time > t + 0.0001f) break;
+            if (e.hands == ExecutionData.HandsLayer.World) world = true;
+            else if (e.hands == ExecutionData.HandsLayer.Overlay) world = false;
+        }
+        return world;
+    }
+
+    static int WorldHandsLayer()
+    {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+        PlayerExecution ex = prefab != null ? prefab.GetComponent<PlayerExecution>() : null;
+        return ex != null ? ex.worldHandsLayer : 0;
     }
 
     // ══════════════════════════════════════════════════════════════════
