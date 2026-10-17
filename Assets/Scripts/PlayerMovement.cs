@@ -169,10 +169,20 @@ public class PlayerMovement : MonoBehaviour
         isSliding = false;
         nextSlideTime = 0f;
         SetSlidingAnim(false);
+        Held = false;   // no scene reload: a run stopped mid-execution must not leave us held
     }
 
     void Update()
     {
+        if (Held)
+        {
+            // placed by someone else: stay exactly where they put us
+            velocity = Vector3.zero;
+            HandleDynamicFov();
+            UpdateMoveShake();
+            return;
+        }
+
         // Grab fall speed before the ground check clamps velocity.y
         float fallSpeed = -velocity.y;
 
@@ -543,6 +553,37 @@ public class PlayerMovement : MonoBehaviour
     {
         SetMovementEnabled(enabled);
         SetLookEnabled(enabled);
+    }
+
+    /// <summary>True while something else (an execution) places the player: no gravity, knockback or movement.</summary>
+    public bool Held { get; private set; }
+
+    /// <summary>
+    /// Hold the player still for an execution: no gravity or knockback (a jump would carry on falling through
+    /// it), the slide ended and standing up at once with the camera rig at its standing height and the head
+    /// bob settled (executions are animated standing; crouching only undoes itself while moving is on).
+    /// </summary>
+    public void Hold(bool hold)
+    {
+        Held = hold;
+        if (!hold) return;
+        velocity = Vector3.zero;
+        knockVelocity = Vector3.zero;
+        if (isSliding) EndSlide();
+        isCrouching = false;
+        targetHeight = standHeight;
+        controller.height = standHeight;
+        controller.center = new Vector3(0f, standHeight * 0.5f, 0f);
+        if (bobTarget != null)
+        {
+            bobTargetLocalOrigin = new Vector3(bobTargetLocalOrigin.x, bobTargetOriginalY, bobTargetLocalOrigin.z);
+            bobTarget.localPosition = bobTargetLocalOrigin;
+        }
+        if (graphics != null)
+        {
+            Vector3 g = graphics.localPosition;
+            graphics.localPosition = new Vector3(g.x, graphicsOriginalY, g.z);
+        }
     }
 
     /// <summary>Teleport the player to the given world position. Resets velocity so the player doesn't

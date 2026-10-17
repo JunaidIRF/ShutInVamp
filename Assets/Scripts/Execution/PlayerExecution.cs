@@ -47,7 +47,7 @@ public class PlayerExecution : MonoBehaviour
     {
         StopAllCoroutines();
         RestoreHands();
-        if (IsExecuting && movement != null) movement.SetPlayerControlsEnabled(true);
+        if (IsExecuting && movement != null) { movement.Hold(false); movement.SetPlayerControlsEnabled(true); }
         IsExecuting = false;
         SetPrompt(false);
     }
@@ -115,6 +115,7 @@ public class PlayerExecution : MonoBehaviour
         IsExecuting = true;
         SetPrompt(false);
         movement.SetPlayerControlsEnabled(false);
+        movement.Hold(true);   // mid-jump / sliding / crouched: no falling, standing, like it was animated
         victim.BeginExecution();
         if (data.worldHandsAtStart) SetHandsWorld();
 
@@ -126,7 +127,7 @@ public class PlayerExecution : MonoBehaviour
         Vector3 startPos = transform.position;
         Vector3 startLook = cam.forward;
         Vector3 goal = victim.transform.TransformPoint(data.playerOffset);
-        goal.y = startPos.y;
+        goal.y = GroundY(goal, startPos.y, victim.transform);   // on the ground, not mid-jump (as it was animated)
         for (float t = 0f; t < data.alignTime; t += Time.deltaTime)
         {
             float k = Mathf.SmoothStep(0f, 1f, t / data.alignTime);
@@ -168,7 +169,35 @@ public class PlayerExecution : MonoBehaviour
         // the player state blends back to Idle on its own (exit-time transition)
         RestoreHands();
         IsExecuting = false;
+        movement.Hold(false);
         movement.SetPlayerControlsEnabled(true);
+    }
+
+    /// <summary>
+    /// Where our feet go at <paramref name="at"/>: the ground under it (what we stand on: our ground layers,
+    /// enemies and ourselves aside), so a standing start is unchanged and a jump or slide ends up there too.
+    /// No ground found: the victim's feet.
+    /// </summary>
+    float GroundY(Vector3 at, float fromY, Transform victim)
+    {
+        float top = Mathf.Max(fromY, victim.position.y) + 1.5f;
+        int mask = movement.groundMask & ~(1 << gameObject.layer) & ~(1 << victim.gameObject.layer);
+        if (Physics.Raycast(new Vector3(at.x, top, at.z), Vector3.down, out RaycastHit hit, top - victim.position.y + 4f, mask, QueryTriggerInteraction.Ignore))
+            return hit.point.y + FeetBelowPivot(transform);
+        return FeetY(victim) + FeetBelowPivot(transform);
+    }
+
+    /// <summary>Height of the bottom of <paramref name="t"/>'s capsule (its feet).</summary>
+    static float FeetY(Transform t) => t.position.y - FeetBelowPivot(t);
+
+    /// <summary>How far below its pivot a character's feet are (the Animate stage uses the same rule).</summary>
+    static float FeetBelowPivot(Transform t)
+    {
+        var cc = t.GetComponent<CharacterController>();
+        if (cc != null) return (cc.height * 0.5f - cc.center.y) * t.lossyScale.y;
+        var cap = t.GetComponent<CapsuleCollider>();
+        if (cap != null) return (cap.height * 0.5f - cap.center.y) * t.lossyScale.y;
+        return 0f;
     }
 
     void Kill(Shooter victim, ExecutionData data, Transform bone) =>
