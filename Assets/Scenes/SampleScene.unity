@@ -407,7 +407,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6082890605949502124, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6215989748502717107, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_TextStyleHashCode
