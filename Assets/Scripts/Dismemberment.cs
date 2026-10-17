@@ -516,6 +516,11 @@ public class Dismemberment : MonoBehaviour
         var cut = new List<int>[subCount];
         var onPlane = new Dictionary<long, int>();   // edge -> its new vertex on the line, shared by both triangles
         const float eps = 1e-4f;
+        float Side(int v)
+        {
+            float d = (v < share.Length ? share[v] : 0f) - 0.5f;
+            return Mathf.Abs(d) < eps ? eps : d;   // exactly half counts as the part's side
+        }
         int Split(int x, int y, float dx, float dy)
         {
             long key = x < y ? ((long)x << 32) | (uint)y : ((long)y << 32) | (uint)x;
@@ -541,39 +546,30 @@ public class Dismemberment : MonoBehaviour
             for (int i = 0; i + 2 < t.Length; i += 3)
             {
                 int a = t[i], b = t[i + 1], c = t[i + 2];
-                var tv = new[] { a, b, c };
-                var td = new float[3];
-                for (int k = 0; k < 3; k++)
-                {
-                    float dk = (tv[k] < share.Length ? share[tv[k]] : 0f) - 0.5f;
-                    td[k] = Mathf.Abs(dk) < eps ? eps : dk;   // exactly half counts as the part's side
-                }
-                int onPart = (td[0] > 0f ? 1 : 0) + (td[1] > 0f ? 1 : 0) + (td[2] > 0f ? 1 : 0);
-                if (onPart == 3) { cut[sm].AddRange(tv); continue; }
-                if (onPart == 0) { keep[sm].AddRange(tv); continue; }
+                float da = Side(a), db = Side(b), dc = Side(c);
+                int onPart = (da > 0f ? 1 : 0) + (db > 0f ? 1 : 0) + (dc > 0f ? 1 : 0);
+                if (onPart == 3) { var l3 = cut[sm]; l3.Add(a); l3.Add(b); l3.Add(c); continue; }
+                if (onPart == 0) { var l0 = keep[sm]; l0.Add(a); l0.Add(b); l0.Add(c); continue; }
 
                 // one corner alone on its side: rotate it first (keeps the winding), split its two edges
                 bool loneIsPart = onPart == 1;
-                int l = 0;
-                while ((td[l] > 0f) != loneIsPart) l++;
-                int A = tv[l], B = tv[(l + 1) % 3], C = tv[(l + 2) % 3];
-                float dA = td[l], dB = td[(l + 1) % 3], dC = td[(l + 2) % 3];
+                int A, B, C; float dA, dB, dC;
+                if ((da > 0f) == loneIsPart) { A = a; B = b; C = c; dA = da; dB = db; dC = dc; }
+                else if ((db > 0f) == loneIsPart) { A = b; B = c; C = a; dA = db; dB = dc; dC = da; }
+                else { A = c; B = a; C = b; dA = dc; dB = da; dC = db; }
                 int ab = Split(A, B, dA, dB), ac = Split(A, C, dA, dC);
                 var lone = loneIsPart ? cut[sm] : keep[sm];
                 var rest = loneIsPart ? keep[sm] : cut[sm];
-                lone.AddRange(new[] { A, ab, ac });
-                rest.AddRange(new[] { ab, B, C });
-                rest.AddRange(new[] { ab, C, ac });
+                lone.Add(A); lone.Add(ab); lone.Add(ac);
+                rest.Add(ab); rest.Add(B); rest.Add(C);
+                rest.Add(ab); rest.Add(C); rest.Add(ac);
             }
         }
 
         if (Count(cut) == 0) return null;
 
         // 2. the openings: body edges the part shared, and the same from the part's side
-        var keepEdges = EdgeSet(keep, weld);
-        var cutEdges = EdgeSet(cut, weld);
-        var bodyRim = Rim(keep, cutEdges, weld);
-        var partRim = Rim(cut, keepEdges, weld);
+        Rims(keep, cut, weld.ToArray(), V.Count, out var bodyRim, out var partRim);
         var result = new CutResult();
 
         // ── body: weights off the part's bones, the part's triangles out, the opening capped ──
@@ -585,11 +581,19 @@ public class Dismemberment : MonoBehaviour
         // The mesh's own space can be squashed (this rig's is), so the cap is shaped where the skin really draws
         // it: each vertex through its skin matrix in the current pose. New positions and normals then go back
         // through the inverse, so they come out right once skinned.
+        // Only the vertices that need it go through their skin matrix (the rim, the skin near the wound), each once
         Matrix4x4[] boneSkin = BoneSkin(smr, mesh);
         var world = new Vector3[V.Count];
+        var skinned = new bool[V.Count];
+        Vector3 World(int v)
+        {
+            if (!skinned[v]) { world[v] = Skin(boneSkin, bw[v]).MultiplyPoint3x4(V[v]); skinned[v] = true; }
+            return world[v];
+        }
+        foreach (var (a, b) in bodyRim) { World(a); World(b); }
+        // which way the part lies: a sample of its vertices is plenty
         var partWorld = Vector3.zero; int partCount = 0;
-        for (int v = 0; v < V.Count; v++) world[v] = Skin(boneSkin, bw[v]).MultiplyPoint3x4(V[v]);
-        foreach (var list in cut) foreach (int v in list) { partWorld += Skin(boneSkin, W[v]).MultiplyPoint3x4(V[v]); partCount++; }
+        foreach (var list in cut) for (int i = 0; i < list.Count; i += 7) { int v = list[i]; partWorld += Skin(boneSkin, W[v]).MultiplyPoint3x4(V[v]); partCount++; }
         if (partCount > 0) partWorld /= partCount;
         var boneTris = new List<int>();
         var stainTris = new List<int>();
@@ -620,8 +624,10 @@ public class Dismemberment : MonoBehaviour
                 var list = keep[sm];
                 for (int i = 0; i + 2 < list.Count; i += 3)
                 {
-                    bool wet = Stained(world[list[i]], middleW, radiusW, look) && Stained(world[list[i + 1]], middleW, radiusW, look) && Stained(world[list[i + 2]], middleW, radiusW, look);
-                    (wet ? stainTris : kept).AddRange(new[] { list[i], list[i + 1], list[i + 2] });
+                    int a = list[i], b = list[i + 1], c = list[i + 2];
+                    bool wet = Stained(World(a), middleW, radiusW, look) && Stained(World(b), middleW, radiusW, look) && Stained(World(c), middleW, radiusW, look);
+                    var into = wet ? stainTris : kept;
+                    into.Add(a); into.Add(b); into.Add(c);
                 }
                 keep[sm] = kept;
             }
@@ -728,17 +734,52 @@ public class Dismemberment : MonoBehaviour
 
     static int Count(List<int>[] lists) { int c = 0; foreach (var l in lists) c += l.Count; return c; }
 
-    static HashSet<long> EdgeSet(List<int>[] tris, IList<int> weld)
+    /// <summary>
+    /// The opening's rim, from both sides: edges of the body's triangles (in their winding) that the part's
+    /// triangles also have, and the same the other way round. Only spots both sides use can be on it, so only
+    /// those edges are looked at (the whole mesh's edges would be most of the cut's time).
+    /// </summary>
+    static void Rims(List<int>[] keep, List<int>[] cut, int[] weld, int spots, out List<(int a, int b)> bodyRim, out List<(int a, int b)> partRim)
     {
-        var set = new HashSet<long>();
-        foreach (var list in tris)
-            for (int i = 0; i + 2 < list.Count; i += 3)
-            {
-                set.Add(EdgeKey(weld[list[i]], weld[list[i + 1]]));
-                set.Add(EdgeKey(weld[list[i + 1]], weld[list[i + 2]]));
-                set.Add(EdgeKey(weld[list[i + 2]], weld[list[i]]));
-            }
-        return set;
+        var inKeep = new bool[spots];
+        var inCut = new bool[spots];
+        foreach (var list in keep) for (int i = 0; i < list.Count; i++) inKeep[weld[list[i]]] = true;
+        foreach (var list in cut) for (int i = 0; i < list.Count; i++) inCut[weld[list[i]]] = true;
+
+        var keepEdges = new HashSet<long>();
+        var cutEdges = new HashSet<long>();
+        void Collect(List<int>[] tris, HashSet<long> into)
+        {
+            foreach (var list in tris)
+                for (int i = 0; i + 2 < list.Count; i += 3)
+                {
+                    int a = weld[list[i]], b = weld[list[i + 1]], c = weld[list[i + 2]];
+                    bool ba = inKeep[a] && inCut[a], bb = inKeep[b] && inCut[b], bc = inKeep[c] && inCut[c];
+                    if (ba && bb) into.Add(EdgeKey(a, b));
+                    if (bb && bc) into.Add(EdgeKey(b, c));
+                    if (bc && ba) into.Add(EdgeKey(c, a));
+                }
+        }
+        Collect(keep, keepEdges);
+        Collect(cut, cutEdges);
+
+        List<(int a, int b)> RimOf(List<int>[] tris, HashSet<long> other)
+        {
+            var rim = new List<(int, int)>();
+            foreach (var list in tris)
+                for (int i = 0; i + 2 < list.Count; i += 3)
+                {
+                    int a = list[i], b = list[i + 1], c = list[i + 2];
+                    int wa = weld[a], wb = weld[b], wc = weld[c];
+                    bool ba = inKeep[wa] && inCut[wa], bb = inKeep[wb] && inCut[wb], bc = inKeep[wc] && inCut[wc];
+                    if (ba && bb && other.Contains(EdgeKey(wa, wb))) rim.Add((a, b));
+                    if (bb && bc && other.Contains(EdgeKey(wb, wc))) rim.Add((b, c));
+                    if (bc && ba && other.Contains(EdgeKey(wc, wa))) rim.Add((c, a));
+                }
+            return rim;
+        }
+        bodyRim = RimOf(keep, cutEdges);
+        partRim = RimOf(cut, keepEdges);
     }
 
     /// <summary>
@@ -964,29 +1005,22 @@ public class Dismemberment : MonoBehaviour
     static Matrix4x4 Skin(Matrix4x4[] boneSkin, BoneWeight w)
     {
         var m = new Matrix4x4();
-        void Add(int bone, float weight)
-        {
-            if (weight <= 0f || bone < 0 || bone >= boneSkin.Length) return;
-            Matrix4x4 b = boneSkin[bone];
-            for (int i = 0; i < 16; i++) m[i] += b[i] * weight;
-        }
-        Add(w.boneIndex0, w.weight0); Add(w.boneIndex1, w.weight1); Add(w.boneIndex2, w.weight2); Add(w.boneIndex3, w.weight3);
+        Add(ref m, boneSkin, w.boneIndex0, w.weight0);
+        Add(ref m, boneSkin, w.boneIndex1, w.weight1);
+        Add(ref m, boneSkin, w.boneIndex2, w.weight2);
+        Add(ref m, boneSkin, w.boneIndex3, w.weight3);
         return m;
     }
 
-    /// <summary>Edges of <paramref name="tris"/> (in their winding) that the other side also has: the opening's rim.</summary>
-    static List<(int a, int b)> Rim(List<int>[] tris, HashSet<long> otherSide, IList<int> weld)
+    /// <summary>m += boneSkin[bone] * weight, field by field (the indexer is slow over a whole mesh).</summary>
+    static void Add(ref Matrix4x4 m, Matrix4x4[] boneSkin, int bone, float k)
     {
-        var rim = new List<(int, int)>();
-        foreach (var list in tris)
-            for (int i = 0; i + 2 < list.Count; i += 3)
-            {
-                int a = list[i], b = list[i + 1], c = list[i + 2];
-                if (otherSide.Contains(EdgeKey(weld[a], weld[b]))) rim.Add((a, b));
-                if (otherSide.Contains(EdgeKey(weld[b], weld[c]))) rim.Add((b, c));
-                if (otherSide.Contains(EdgeKey(weld[c], weld[a]))) rim.Add((c, a));
-            }
-        return rim;
+        if (k <= 0f || bone < 0 || bone >= boneSkin.Length) return;
+        Matrix4x4 b = boneSkin[bone];
+        m.m00 += b.m00 * k; m.m01 += b.m01 * k; m.m02 += b.m02 * k; m.m03 += b.m03 * k;
+        m.m10 += b.m10 * k; m.m11 += b.m11 * k; m.m12 += b.m12 * k; m.m13 += b.m13 * k;
+        m.m20 += b.m20 * k; m.m21 += b.m21 * k; m.m22 += b.m22 * k; m.m23 += b.m23 * k;
+        m.m30 += b.m30 * k; m.m31 += b.m31 * k; m.m32 += b.m32 * k; m.m33 += b.m33 * k;
     }
 
     static Vector3 Middle(IList<Vector3> pos, List<int>[] tris)
