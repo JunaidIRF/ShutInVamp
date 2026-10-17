@@ -531,6 +531,8 @@ public class PlayerMovement : MonoBehaviour
     }
 
     /// <summary>Enable or disable mouse look.</summary>
+    public bool LookEnabled => lookEnabled;
+
     public void SetLookEnabled(bool enabled)
     {
         lookEnabled = enabled;

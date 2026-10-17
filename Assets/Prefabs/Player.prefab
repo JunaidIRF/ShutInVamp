@@ -8371,6 +8371,7 @@ GameObject:
   - component: {fileID: 6082890605949502124}
   - component: {fileID: 966134056652523022}
   - component: {fileID: 3175878800404500412}
+  - component: {fileID: 9016484500359101622}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -8842,6 +8843,31 @@ MonoBehaviour:
   minAhead: 2.5
   fadeIn: 6
   fadeOut: 3
+--- !u!114 &9016484500359101622
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5446419775191248859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57c79f51ce654f84fa92bebb22f4504d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HandSway
+  movement: {fileID: 8213888485866622640}
+  block: {fileID: 5794157458762835431}
+  hands:
+  - {fileID: 8013984872172221370}
+  - {fileID: 2554155191784619878}
+  lookAmount: 1.2
+  lookMax: 3
+  lookShift: 0.012
+  lookShiftMax: 0.03
+  moveShift: 0.004
+  moveShiftMax: 0.035
+  moveRoll: 0.35
+  smooth: 9
 --- !u!1 &5481123272860611650
 GameObject:
   m_ObjectHideFlags: 0
