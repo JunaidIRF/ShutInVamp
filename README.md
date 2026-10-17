@@ -45,7 +45,7 @@ A first-person vampire brawler where the sun is the deadliest enemy.
 | `Ctrl` | Crouch (slide while sprinting) |
 | `Left Click` | Claw attack |
 | `Right Click` | Parry |
-| `Left Alt` (hold) | Guard |
+| `V` (hold) | Guard |
 | `E` | Execute a stunned hunter |
 | `F` | Inspect claws |
 | `Esc` | Pause |
