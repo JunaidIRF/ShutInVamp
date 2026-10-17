@@ -124,12 +124,16 @@ public class Dismemberment : MonoBehaviour
     readonly List<(Transform bone, GameObject go)> jets = new List<(Transform, GameObject)>();   // blood jets on the body
     readonly List<Collider> pieces = new List<Collider>();                     // severed parts still around
     CutLook look;
+    readonly Queue<(Transform bone, Vector3 direction)> queue = new Queue<(Transform, Vector3)>();   // cuts waiting their turn
+    Coroutine worker;
 
     void OnEnable()
     {
         severed.Clear();
         jets.Clear();
         pieces.Clear();
+        queue.Clear();
+        worker = null;   // (coroutines stop with the object)
     }
 
     /// <summary>True if <paramref name="bone"/> (or a bone above it) has been cut off.</summary>
@@ -194,24 +198,55 @@ public class Dismemberment : MonoBehaviour
 
     public bool Sever(Part part, Vector3 direction) => part != null && Sever(FindDeep(transform, part.bone), direction);
 
-    /// <summary>Cuts the body off at <paramref name="bone"/>: it and everything under it fly off.</summary>
+    /// <summary>
+    /// Cuts the body off at <paramref name="bone"/>: it and everything under it fly off. The heavy part of the cut
+    /// runs on a worker thread, so it doesn't stall the game: the bone counts as cut at once, the mesh changes a
+    /// frame or two later. Cuts on one body happen in order (each works on the body the last one left).
+    /// </summary>
     public bool Sever(Transform bone, Vector3 direction)
     {
-        if (!CanCut(bone) || IsCut(bone)) return false;
+        if (!CanCut(bone) || IsCut(bone) || !HasCuttableMesh()) return false;
+        severed.Add(bone);
+        queue.Enqueue((bone, direction));
+        if (worker == null) worker = StartCoroutine(Work());
+        return true;
+    }
+
+    bool HasCuttableMesh()
+    {
+        foreach (var smr in GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            if (smr.enabled && smr.sharedMesh != null && smr.sharedMesh.isReadable && !smr.name.Contains("HitFlash")) return true;
+        return false;
+    }
+
+    IEnumerator Work()
+    {
+        while (queue.Count > 0)
+        {
+            var (bone, direction) = queue.Dequeue();
+            if (bone != null) yield return Cut(bone, direction);
+        }
+        worker = null;
+    }
+
+    IEnumerator Cut(Transform bone, Vector3 direction)
+    {
         if (bloodFx == null) { var s = GetComponentInParent<Shooter>(); if (s != null) bloodFx = s.bloodFx; }
         if (look == null || look.wound == null) look = MakeLook(BodyMaterial());
 
         Part tuned = parts.Find(p => p.bone == bone.name);
         string partName = tuned != null ? Label(tuned.part) : BoneLabel(bone.name);
-        CutPose(bone, out Vector3 cutPoint, out Vector3 along);   // replaced by the measured wound below
 
         var renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
         var done = new Dictionary<Mesh, Mesh>();   // original -> body (HitFlash overlays share the mesh)
         Transform piece = null;
         bool any = false;
+        Vector3 cutPoint = Vector3.zero, along = Vector3.up;
+        bool measured = false;
 
         foreach (var smr in renderers)
         {
+            if (smr == null) continue;
             Mesh original = smr.sharedMesh;
             if (original == null || done.ContainsKey(original)) continue;
             if (!original.isReadable) { Debug.LogWarning($"Dismemberment: '{original.name}' isn't Read/Write enabled"); continue; }
@@ -224,8 +259,15 @@ public class Dismemberment : MonoBehaviour
             Vector3[] posedV = baked.vertices, posedN = baked.normals;
             Destroy(baked);
 
-            CutResult cut = CutMesh(smr, original, smr.sharedMaterials, look, bone, posedV, posedN);
-            if (cut == null) continue;
+            // read what the cut needs here, work it out on a worker thread, build the meshes back here
+            CutInput input = PrepareCut(smr, original, smr.sharedMaterials, look, bone, posedV, posedN);
+            if (input == null) continue;
+            var task = System.Threading.Tasks.Task.Run(() => ComputeCut(input));
+            while (!task.IsCompleted) yield return null;
+            CutData data = task.IsFaulted ? ComputeCut(input) : task.Result;   // (a failure there shows up properly here)
+            if (data == null || smr == null || bone == null) continue;
+
+            CutResult cut = BuildCut(input, data);
             cut.body.name = original.name + " (no " + partName + ")";
             done[original] = cut.body;
             smr.sharedMesh = cut.body;
@@ -236,17 +278,18 @@ public class Dismemberment : MonoBehaviour
             {
                 cutPoint = smr.transform.position + smr.transform.rotation * cut.posedCentre;
                 along = smr.transform.rotation * cut.posedNormal;
+                measured = true;
             }
             float mass = tuned != null && tuned.mass > 0f ? tuned.mass : Mathf.Clamp(cut.piece.bounds.size.x * cut.piece.bounds.size.y * cut.piece.bounds.size.z * 500f, 0.5f, 25f);
             cut.piece.name = original.name + " (" + partName + ")";
             piece = SpawnPiece(partName, mass, cut.piece, cut.bodyMaterials, smr, direction);
         }
-        if (!any) return false;
+        if (bone == null) yield break;
+        if (!any) { severed.Remove(bone); yield break; }
+        if (!measured) CutPose(bone, out cutPoint, out along);   // no clean opening: a rough cut from the bones
         // overlay copies that were skipped above
         foreach (var smr in renderers)
-            if (smr.sharedMesh != null && done.TryGetValue(smr.sharedMesh, out Mesh b)) smr.sharedMesh = b;
-
-        severed.Add(bone);
+            if (smr != null && smr.sharedMesh != null && done.TryGetValue(smr.sharedMesh, out Mesh b)) smr.sharedMesh = b;
 
         // jets from an earlier cut further down this part go with it
         for (int i = jets.Count - 1; i >= 0; i--)
@@ -270,7 +313,6 @@ public class Dismemberment : MonoBehaviour
         severSound?.PlayAt(cutPoint);
         StartCoroutine(Spurt(jetParent, cutPoint, along, spurts, 1f, true));
         if (piece != null) StartCoroutine(Spurt(piece, cutPoint, -along, pieceSpurts, pieceSpurtStrength, false));
-        return true;
     }
 
     /// <summary>
@@ -458,32 +500,72 @@ public class Dismemberment : MonoBehaviour
     /// so its edge stays put. Both openings (found by vertex position: UV seams split vertices) are closed
     /// with a slightly sunken cap in the wound submesh. With <paramref name="posed"/> (baked, renderer space
     /// without scale) it also builds the cut-off piece. Null if nothing goes with the bone.
+    /// All in one go: the game splits it (<see cref="PrepareCut"/>, <see cref="ComputeCut"/> off the main thread, <see cref="BuildCut"/>).
     /// </summary>
     public static CutResult CutMesh(SkinnedMeshRenderer smr, Mesh mesh, Material[] materials, CutLook look, Transform bone,
                                     Vector3[] posed, Vector3[] posedNormals)
     {
-        float depth = look.depth;
-        float[] share = PartShare(smr, mesh, new[] { bone }, out HashSet<int> partBones);
-        if (share == null) return null;
+        CutInput input = PrepareCut(smr, mesh, materials, look, bone, posed, posedNormals);
+        if (input == null) return null;
+        CutData data = ComputeCut(input);
+        return data != null ? BuildCut(input, data) : null;
+    }
 
-        // every vertex attribute as a list: the slice adds vertices on the cut line
-        var V = new List<Vector3>(mesh.vertices);
-        int n0 = V.Count;
-        var N = new List<Vector3>(mesh.normals);
-        while (N.Count < n0) N.Add(Vector3.up);
-        Vector4[] tangents = mesh.tangents;
-        var T = tangents.Length == n0 ? new List<Vector4>(tangents) : null;
-        Vector2[] uvs = mesh.uv;
-        var UV = new List<Vector2>(uvs.Length == n0 ? uvs : new Vector2[n0]);
-        bool hasUV = uvs.Length == n0;
-        var W = new List<BoneWeight>(mesh.boneWeights);
-        var P = posed != null ? new List<Vector3>(posed) : null;
-        var PN = posed != null ? new List<Vector3>(posedNormals != null && posedNormals.Length == n0 ? posedNormals : new Vector3[n0]) : null;
+    /// <summary>Everything a cut needs from the scene and the mesh, read on the main thread.</summary>
+    public class CutInput
+    {
+        public Mesh mesh;                       // the mesh being cut (its layout and bind poses, for the build)
+        public CutLook look;
+        public HashSet<int> partBones;          // the renderer's bones that go with the part
+        public Vector3[] vertices, normals, posed, posedNormals;
+        public Vector4[] tangents;
+        public Vector2[] uvs;
+        public BoneWeight[] weights;
+        public int[][] tris;                    // per submesh
+        public int subCount, capSub, boneSub, bloodSub;
+        public Material[] mats;                 // the body's materials after the cut (wound / bone / blood added if new)
+        public float weldSize;                  // vertices closer than this are one spot
+        public Matrix4x4[] boneSkin;            // per bone: mesh space to world, in the pose right now
+    }
+
+    /// <summary>A worked-out cut: plain arrays, no Unity objects, so it can be made on any thread.</summary>
+    public class CutData
+    {
+        public List<Vector3> V, N;
+        public List<Vector4> T;
+        public List<Vector2> UV;
+        public bool hasUV;
+        public BoneWeight[] weights;
+        public List<int>[] bodySubs;
+        public int capCentre = -1;
+        public bool hasWound;
+        public List<Vector3> pv, pn;            // the piece (null if no posed mesh was given)
+        public List<Vector2> puv;
+        public List<int>[] pieceSubs;
+        public Vector3 posedCentre, posedNormal;
+    }
+
+    /// <summary>Reads what <see cref="ComputeCut"/> needs (main thread). Null if nothing goes with the bone.</summary>
+    public static CutInput PrepareCut(SkinnedMeshRenderer smr, Mesh mesh, Material[] materials, CutLook look, Transform bone,
+                                      Vector3[] posed, Vector3[] posedNormals)
+    {
+        HashSet<int> partBones = PartBones(smr, new[] { bone });
+        if (partBones.Count == 0) return null;
+        var input = new CutInput
+        {
+            mesh = mesh, look = look, partBones = partBones,
+            vertices = mesh.vertices, normals = mesh.normals, tangents = mesh.tangents, uvs = mesh.uv, weights = mesh.boneWeights,
+            posed = posed, posedNormals = posedNormals,
+            subCount = mesh.subMeshCount,
+            weldSize = Mathf.Max(mesh.bounds.size.magnitude, 1e-6f) * 1e-5f,
+            boneSkin = BoneSkin(smr, mesh),
+        };
+        input.tris = new int[input.subCount][];
+        for (int sm = 0; sm < input.subCount; sm++) input.tris[sm] = mesh.GetTriangles(sm);
 
         // submeshes: the mesh's own, then flesh / bone / blood (already there after an earlier cut, else added)
-        int subCount = mesh.subMeshCount;
-        var mats = new List<Material>(subCount + 3);
-        for (int i = 0; i < subCount; i++) mats.Add(i < materials.Length ? materials[i] : null);
+        var mats = new List<Material>(input.subCount + 3);
+        for (int i = 0; i < input.subCount; i++) mats.Add(i < materials.Length ? materials[i] : null);
         int SubFor(Material m)
         {
             int i = mats.IndexOf(m);
@@ -491,13 +573,40 @@ public class Dismemberment : MonoBehaviour
             mats.Add(m);
             return mats.Count - 1;
         }
-        int capSub = SubFor(look.wound), boneSub = SubFor(look.bone), bloodSub = SubFor(look.blood);
-        int totalSubs = mats.Count;
-        var tris = new int[subCount][];
-        for (int sm = 0; sm < subCount; sm++) tris[sm] = mesh.GetTriangles(sm);
+        input.capSub = SubFor(look.wound); input.boneSub = SubFor(look.bone); input.bloodSub = SubFor(look.blood);
+        input.mats = mats.ToArray();
+        return input;
+    }
+
+    /// <summary>The cut itself, on plain data (safe on a worker thread). Null if nothing goes with the bone.</summary>
+    public static CutData ComputeCut(CutInput input)
+    {
+        CutLook look = input.look;
+        float depth = look.depth;
+        var share = new float[input.weights.Length];
+        for (int v = 0; v < share.Length; v++) share[v] = ShareOf(input.weights[v], input.partBones);
+
+        // every vertex attribute as a list: the slice adds vertices on the cut line
+        var V = new List<Vector3>(input.vertices);
+        int n0 = V.Count;
+        var N = new List<Vector3>(input.normals);
+        while (N.Count < n0) N.Add(Vector3.up);
+        Vector4[] tangents = input.tangents;
+        var T = tangents.Length == n0 ? new List<Vector4>(tangents) : null;
+        Vector2[] uvs = input.uvs;
+        var UV = new List<Vector2>(uvs.Length == n0 ? uvs : new Vector2[n0]);
+        bool hasUV = uvs.Length == n0;
+        var W = new List<BoneWeight>(input.weights);
+        var P = input.posed != null ? new List<Vector3>(input.posed) : null;
+        var PN = input.posed != null ? new List<Vector3>(input.posedNormals != null && input.posedNormals.Length == n0 ? input.posedNormals : new Vector3[n0]) : null;
+
+        int subCount = input.subCount;
+        int capSub = input.capSub, boneSub = input.boneSub, bloodSub = input.bloodSub;
+        int totalSubs = input.mats.Length;
+        int[][] tris = input.tris;
 
         // vertices at the same spot count as one (UV seams duplicate them), so an opening is one closed edge
-        float q = Mathf.Max(mesh.bounds.size.magnitude, 1e-6f) * 1e-5f;
+        float q = input.weldSize;
         var firstAt = new Dictionary<Vector3Int, int>();
         var weld = new List<int>(n0);
         int SpotOf(int v)
@@ -570,11 +679,11 @@ public class Dismemberment : MonoBehaviour
 
         // 2. the openings: body edges the part shared, and the same from the part's side
         Rims(keep, cut, weld.ToArray(), V.Count, out var bodyRim, out var partRim);
-        var result = new CutResult();
+        var result = new CutData();
 
         // ── body: weights off the part's bones, the part's triangles out, the opening capped ──
         var bw = new List<BoneWeight>(W.Count);
-        foreach (var w in W) bw.Add(WithoutBones(w, partBones));
+        foreach (var w in W) bw.Add(WithoutBones(w, input.partBones));
         var capTris = new List<int>();
         var copiedFrom = new List<int>();
 
@@ -582,7 +691,7 @@ public class Dismemberment : MonoBehaviour
         // it: each vertex through its skin matrix in the current pose. New positions and normals then go back
         // through the inverse, so they come out right once skinned.
         // Only the vertices that need it go through their skin matrix (the rim, the skin near the wound), each once
-        Matrix4x4[] boneSkin = BoneSkin(smr, mesh);
+        Matrix4x4[] boneSkin = input.boneSkin;
         var world = new Vector3[V.Count];
         var skinned = new bool[V.Count];
         Vector3 World(int v)
@@ -633,31 +742,20 @@ public class Dismemberment : MonoBehaviour
             }
         }
 
-        var body = new Mesh();
-        if (V.Count > 65535) body.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        // the original's exact vertex layout (streams, formats): the renderer switches between the two meshes, and
-        // skinning set up for one layout stops rendering on the other
-        body.SetVertexBufferParams(V.Count, mesh.GetVertexAttributes());
-        body.SetVertices(V);
-        body.SetNormals(N);
-        if (T != null) body.SetTangents(T);
-        if (hasUV) body.SetUVs(0, UV);
-        body.boneWeights = bw.ToArray();
-        body.bindposes = mesh.bindposes;
-        body.subMeshCount = totalSubs;
+        // the body's triangles, as copies: on a second cut the wound / bone / blood submeshes already exist, and the
+        // new cap's vertices mustn't end up in keep (the piece's middle below reads keep against the posed vertices)
+        var bodySubs = new List<int>[totalSubs];
         for (int sm = 0; sm < totalSubs; sm++)
         {
-            // a copy: on a second cut the wound / bone / blood submeshes already exist, and the new cap's
-            // vertices mustn't end up in keep (the piece's middle below reads keep against the posed vertices)
             var list = sm < subCount ? new List<int>(keep[sm]) : new List<int>();
             if (sm == capSub) list.AddRange(capTris);
             if (sm == boneSub) list.AddRange(boneTris);
             if (sm == bloodSub) list.AddRange(stainTris);
-            body.SetTriangles(list, sm);
+            bodySubs[sm] = list;
         }
-        body.RecalculateBounds();
-        result.body = body;
-        result.bodyMaterials = mats.ToArray();
+        result.V = V; result.N = N; result.T = T; result.UV = UV; result.hasUV = hasUV;
+        result.weights = bw.ToArray();
+        result.bodySubs = bodySubs;
 
         if (P == null) return result;
 
@@ -715,15 +813,7 @@ public class Dismemberment : MonoBehaviour
         }
         pieceSubs[capSub].AddRange(pieceCap);
 
-        var piece = new Mesh();
-        if (pv.Count > 65535) piece.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        piece.SetVertices(pv);
-        piece.SetNormals(pn);
-        piece.SetUVs(0, puv);
-        piece.subMeshCount = pieceSubs.Length;
-        for (int sm = 0; sm < pieceSubs.Length; sm++) piece.SetTriangles(pieceSubs[sm], sm);
-        piece.RecalculateBounds();
-        result.piece = piece;
+        result.pv = pv; result.pn = pn; result.puv = puv; result.pieceSubs = pieceSubs;
 
         // where the wound is in the pose, for the blood: the body's opening, facing into the part
         if (PlaneOf(bodyRim, posedArray, weld, Middle(posedArray, cut), out Vector3 wc, out Vector3 wn))
@@ -731,6 +821,40 @@ public class Dismemberment : MonoBehaviour
             result.posedCentre = wc;
             result.posedNormal = wn;
         }
+        return result;
+    }
+
+    /// <summary>The meshes from a worked-out cut (main thread): the body in the original's exact vertex layout, the piece.</summary>
+    public static CutResult BuildCut(CutInput input, CutData data)
+    {
+        var result = new CutResult { capCentre = data.capCentre, hasWound = data.hasWound, posedCentre = data.posedCentre, posedNormal = data.posedNormal };
+        var body = new Mesh();
+        if (data.V.Count > 65535) body.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        // the original's exact vertex layout (streams, formats): the renderer switches between the two meshes, and
+        // skinning set up for one layout stops rendering on the other
+        body.SetVertexBufferParams(data.V.Count, input.mesh.GetVertexAttributes());
+        body.SetVertices(data.V);
+        body.SetNormals(data.N);
+        if (data.T != null) body.SetTangents(data.T);
+        if (data.hasUV) body.SetUVs(0, data.UV);
+        body.boneWeights = data.weights;
+        body.bindposes = input.mesh.bindposes;
+        body.subMeshCount = data.bodySubs.Length;
+        for (int sm = 0; sm < data.bodySubs.Length; sm++) body.SetTriangles(data.bodySubs[sm], sm);
+        body.RecalculateBounds();
+        result.body = body;
+        result.bodyMaterials = input.mats;
+
+        if (data.pv == null) return result;
+        var piece = new Mesh();
+        if (data.pv.Count > 65535) piece.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        piece.SetVertices(data.pv);
+        piece.SetNormals(data.pn);
+        piece.SetUVs(0, data.puv);
+        piece.subMeshCount = data.pieceSubs.Length;
+        for (int sm = 0; sm < data.pieceSubs.Length; sm++) piece.SetTriangles(data.pieceSubs[sm], sm);
+        piece.RecalculateBounds();
+        result.piece = piece;
         return result;
     }
 
@@ -1060,10 +1184,10 @@ public class Dismemberment : MonoBehaviour
 
     static long EdgeKey(int a, int b) => a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
 
-    /// <summary>How much of each vertex follows <paramref name="bones"/> (each with everything under it). Null if none do.</summary>
-    public static float[] PartShare(SkinnedMeshRenderer smr, Mesh mesh, IList<Transform> bones, out HashSet<int> partBones)
+    /// <summary>The renderer's bones that are <paramref name="bones"/> or under them (main thread: walks Transforms).</summary>
+    public static HashSet<int> PartBones(SkinnedMeshRenderer smr, IList<Transform> bones)
     {
-        partBones = new HashSet<int>();
+        var partBones = new HashSet<int>();
         Transform[] smrBones = smr.bones;
         for (int b = 0; b < smrBones.Length; b++)
         {
@@ -1071,19 +1195,28 @@ public class Dismemberment : MonoBehaviour
             foreach (var bone in bones)
                 if (bone != null && (smrBones[b] == bone || smrBones[b].IsChildOf(bone))) { partBones.Add(b); break; }
         }
+        return partBones;
+    }
+
+    /// <summary>How much of a vertex with weights <paramref name="w"/> follows <paramref name="partBones"/>.</summary>
+    static float ShareOf(BoneWeight w, HashSet<int> partBones)
+    {
+        float sum = 0f;
+        if (partBones.Contains(w.boneIndex0)) sum += w.weight0;
+        if (partBones.Contains(w.boneIndex1)) sum += w.weight1;
+        if (partBones.Contains(w.boneIndex2)) sum += w.weight2;
+        if (partBones.Contains(w.boneIndex3)) sum += w.weight3;
+        return sum;
+    }
+
+    /// <summary>How much of each vertex follows <paramref name="bones"/> (each with everything under it). Null if none do.</summary>
+    public static float[] PartShare(SkinnedMeshRenderer smr, Mesh mesh, IList<Transform> bones, out HashSet<int> partBones)
+    {
+        partBones = PartBones(smr, bones);
         if (partBones.Count == 0) return null;
         var weights = mesh.boneWeights;
         var share = new float[weights.Length];
-        for (int v = 0; v < weights.Length; v++)
-        {
-            var w = weights[v];
-            float sum = 0f;
-            if (partBones.Contains(w.boneIndex0)) sum += w.weight0;
-            if (partBones.Contains(w.boneIndex1)) sum += w.weight1;
-            if (partBones.Contains(w.boneIndex2)) sum += w.weight2;
-            if (partBones.Contains(w.boneIndex3)) sum += w.weight3;
-            share[v] = sum;
-        }
+        for (int v = 0; v < weights.Length; v++) share[v] = ShareOf(weights[v], partBones);
         return share;
     }
 
