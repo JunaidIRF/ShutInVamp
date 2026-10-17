@@ -369,12 +369,21 @@ public static class ExecutionAnimEditing
     {
         var d = enemy.GetComponent<Dismemberment>();
         if (d == null) { Debug.LogWarning("Execution sever preview: the stage's enemy has no Dismemberment"); return; }
+        // the stage's enemy is a copy from when Animate was pressed: use the enemy prefab's parts, so the preview
+        // matches the game even when they changed since
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(EnemyPrefabPath);
+        var source = prefab != null ? prefab.GetComponentInChildren<Dismemberment>(true) : null;
+        if (source != null)
+        {
+            d.parts = source.parts.Select(p => new Dismemberment.Part { part = p.part, bone = p.bone, stumpSize = p.stumpSize, mass = p.mass, claw = p.claw }).ToList();
+            d.stumpColor = source.stumpColor;
+        }
         var found = new System.Collections.Generic.List<(Transform bone, string name, float time)>();
         foreach (var (part, time) in cuts)
         {
             string name = Dismemberment.Label(part);
             Transform bone = d.BoneOf(part);
-            if (bone == null) { Debug.LogWarning($"Execution sever preview: '{name}' has no bone on the enemy (Dismemberment > Parts)"); continue; }
+            if (bone == null) { Debug.LogWarning($"Execution sever preview: '{name}' has no bone on the enemy (Shooter prefab > Model > Dismemberment > Parts)"); continue; }
             if (!d.CanCut(bone)) { Debug.LogWarning($"Execution sever preview: '{name}' is mapped to '{bone.name}', which can't be cut (the root bone)"); continue; }
             found.Add((bone, name, time));
         }
