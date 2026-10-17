@@ -5459,8 +5459,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -0.037499998}
-  m_SizeDelta: {x: 0.29999998, y: 0.044999998}
+  m_AnchoredPosition: {x: 0, y: -0.044999998}
+  m_SizeDelta: {x: 0.59999996, y: 0.089999996}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &9190049606154876686
 CanvasRenderer:
@@ -5490,10 +5490,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: <b>[E]</b> Execute
+  m_text: <color=#FFC93C>[E]</color> EXECUTE
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: e73a58f6e2794ae7b1b7e50b7fb811b0, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 03ddbfa31d5f51c488920a85478c2916, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: 5be80877a96a0304685a811e0042deb7, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -5517,8 +5517,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 0.021
-  m_fontSizeBase: 0.021
+  m_fontSize: 0.048
+  m_fontSizeBase: 0.048
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -5527,7 +5527,7 @@ MonoBehaviour:
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 256
   m_textAlignment: 65535
-  m_characterSpacing: 0
+  m_characterSpacing: 4
   m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
@@ -8704,6 +8704,8 @@ MonoBehaviour:
   key: 101
   range: 1.6
   maxAngle: 55
+  hands: []
+  worldHandsLayer: 0
 --- !u!1 &5481123272860611650
 GameObject:
   m_ObjectHideFlags: 0
