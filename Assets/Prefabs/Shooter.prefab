@@ -1327,8 +1327,12 @@ MonoBehaviour:
   headLifetime: 20
   stumpColor: {r: 0.35, g: 0.02, b: 0.03, a: 1}
   bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
-  spurts: 4
-  spurtInterval: 0.35
+  neckBloodFx: {fileID: 3654356420683697179, guid: 512ed9afcf5c09f408fde5149cd32327, type: 3}
+  spurts: 5
+  spurtInterval: 0.32
+  spurtFalloff: 0.82
+  headSpurts: 2
+  headSpurtStrength: 0.6
   bloodLifetime: 9
 --- !u!1 &3608250417691826739 stripped
 GameObject:

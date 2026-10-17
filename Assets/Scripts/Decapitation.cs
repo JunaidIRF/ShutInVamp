@@ -23,9 +23,13 @@ public class Decapitation : MonoBehaviour
 
     [Header("Neck")]
     public Color stumpColor = new Color(0.35f, 0.02f, 0.03f);
-    public GameObject bloodFx;              // falls back to the Shooter's blood effect
-    public int spurts = 4;
-    public float spurtInterval = 0.35f;
+    public GameObject bloodFx;              // one splash at the cut; falls back to the Shooter's blood effect
+    public GameObject neckBloodFx;          // the jet out of the neck, replayed for every pulse
+    public int spurts = 5;
+    public float spurtInterval = 0.32f;
+    public float spurtFalloff = 0.82f;      // each pulse this much weaker than the last
+    public int headSpurts = 2;              // a couple of weaker jets out of the flying head
+    public float headSpurtStrength = 0.6f;
     public float bloodLifetime = 9f;
 
     public bool IsDecapitated { get; private set; }
@@ -39,8 +43,16 @@ public class Decapitation : MonoBehaviour
         if (head == null) return;
         if (bloodFx == null) { var s = GetComponentInParent<Shooter>(); if (s != null) bloodFx = s.bloodFx; }
 
+        // where it comes off: just below the head, facing along the neck
+        Transform stumpParent = neck != null ? neck : head.parent;
+        Vector3 cutPoint = Vector3.Lerp(stumpParent.position, head.position, 0.85f);
+        Vector3 neckDir = head.position - stumpParent.position;
+        neckDir = neckDir.sqrMagnitude > 0.000001f ? neckDir.normalized : Vector3.up;
+        float stumpSize = Mathf.Max(0.04f, Vector3.Distance(stumpParent.position, head.position) * 0.9f);
+
         var renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
         var done = new Dictionary<Mesh, Mesh>();   // original -> body (HitFlash overlays share the mesh)
+        Transform severed = null;
         bool any = false;
 
         foreach (var smr in renderers)
@@ -123,7 +135,7 @@ public class Decapitation : MonoBehaviour
             smr.sharedMesh = body;
             any = true;
 
-            SpawnHead(headMesh, smr, direction);
+            severed = SpawnHead(headMesh, smr, direction, cutPoint, neckDir, stumpSize);
         }
         if (!any) return;
         // hidden overlay copies that were skipped above
@@ -134,18 +146,19 @@ public class Decapitation : MonoBehaviour
 
         // the body's head bone: no collider bumping where nothing is drawn, nothing left to see
         foreach (var c in head.GetComponents<Collider>()) c.enabled = false;
+        // its rigidbody stays dynamic: it's jointed to the neck, so a kinematic one would hang the body in the air
         var rb = head.GetComponent<Rigidbody>();
-        if (rb != null) { rb.isKinematic = true; rb.detectCollisions = false; }
+        if (rb != null) { rb.detectCollisions = false; rb.mass = Mathf.Min(rb.mass, 0.5f); }
         head.localScale = Vector3.zero;
 
-        // neck stump + spurting blood
-        Transform stumpParent = neck != null ? neck : head.parent;
-        Vector3 cutPoint = Vector3.Lerp(stumpParent.position, head.position, 0.85f);
-        Stump(stumpParent, cutPoint, Mathf.Max(0.04f, Vector3.Distance(stumpParent.position, head.position) * 0.9f));
-        StartCoroutine(Spurt(stumpParent, head, cutPoint));
+        // neck stump, a splash at the cut, then the neck pumps blood out in pulses
+        Stump(stumpParent, cutPoint, neckDir, stumpSize);
+        if (bloodFx != null) Destroy(Instantiate(bloodFx, cutPoint, Quaternion.LookRotation(neckDir)), bloodLifetime);
+        StartCoroutine(Spurt(stumpParent, cutPoint, neckDir, spurts, 1f));
+        if (severed != null) StartCoroutine(Spurt(severed, cutPoint, -neckDir, headSpurts, headSpurtStrength));
     }
 
-    void SpawnHead(Mesh mesh, SkinnedMeshRenderer source, Vector3 direction)
+    Transform SpawnHead(Mesh mesh, SkinnedMeshRenderer source, Vector3 direction, Vector3 cutPoint, Vector3 neckDir, float stumpSize)
     {
         // centre the mesh on its pivot, so the rigidbody spins around the head itself
         Vector3 centre = mesh.bounds.center;
@@ -157,7 +170,7 @@ public class Decapitation : MonoBehaviour
         var go = new GameObject("Severed Head");
         go.layer = source.gameObject.layer;
         // baked vertices are world-sized in the renderer's position / rotation
-        go.transform.SetPositionAndRotation(source.transform.TransformPoint(centre), source.transform.rotation);
+        go.transform.SetPositionAndRotation(source.transform.position + source.transform.rotation * centre, source.transform.rotation);
         go.transform.localScale = Vector3.one;
         go.AddComponent<MeshFilter>().sharedMesh = mesh;
         var mr = go.AddComponent<MeshRenderer>();
@@ -179,14 +192,15 @@ public class Decapitation : MonoBehaviour
         rb.linearVelocity = dir * headSpeed + Vector3.up * headLift;
         rb.angularVelocity = Random.onUnitSphere * headSpin;
 
-        // a red cap where it came off (bottom of the head mesh)
-        Vector3 bottom = new Vector3(mesh.bounds.center.x, mesh.bounds.min.y, mesh.bounds.center.z);
-        Stump(go.transform, go.transform.TransformPoint(bottom), mesh.bounds.size.x * go.transform.lossyScale.x * 0.5f);
+        // a red cap where it came off
+        Stump(go.transform, cutPoint, -neckDir, stumpSize);
 
         Destroy(go, headLifetime);
+        return go.transform;
     }
 
-    void Stump(Transform parent, Vector3 worldPos, float size)
+    /// <summary>A flattened dark-red cap at <paramref name="worldPos"/>, its flat side facing <paramref name="normal"/>.</summary>
+    void Stump(Transform parent, Vector3 worldPos, Vector3 normal, float size)
     {
         var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         s.name = "Neck Stump";
@@ -194,7 +208,7 @@ public class Decapitation : MonoBehaviour
         s.layer = parent.gameObject.layer;
         s.transform.SetParent(parent, false);
         s.transform.position = worldPos;
-        s.transform.localRotation = Quaternion.identity;
+        s.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal);
         Vector3 ls = parent.lossyScale;
         float k = size / Mathf.Max(Mathf.Abs(ls.x), 0.0001f);
         s.transform.localScale = new Vector3(k, k * 0.45f, k);
@@ -208,20 +222,30 @@ public class Decapitation : MonoBehaviour
         r.sharedMaterial = mat;
     }
 
-    IEnumerator Spurt(Transform neck, Transform head, Vector3 firstPoint)
+    /// <summary>
+    /// The jet rides on <paramref name="parent"/> (the ragdoll's neck, or the flying head), so it keeps
+    /// pointing out of the wound as that tumbles; its drops fly free in world space.
+    /// </summary>
+    IEnumerator Spurt(Transform parent, Vector3 at, Vector3 dir, int pulses, float strength)
     {
-        if (bloodFx == null) yield break;
-        for (int i = 0; i <= spurts; i++)
+        if (neckBloodFx == null || pulses <= 0) yield break;
+        var fx = Instantiate(neckBloodFx, at, Quaternion.LookRotation(dir));
+        fx.transform.SetParent(parent, true);
+        var ps = fx.GetComponent<ParticleSystem>();
+        var main = ps.main;
+        float speed = main.startSpeedMultiplier;
+        var emission = ps.emission;
+        float rate = emission.rateOverTimeMultiplier;
+        for (int i = 0; i < pulses && fx != null; i++)
         {
-            // out of the neck, following the body as it falls
-            Vector3 up = (head.position - neck.position);
-            Vector3 dir = up.sqrMagnitude > 0.0001f ? up.normalized : Vector3.up;
-            Vector3 at = i == 0 ? firstPoint : Vector3.Lerp(neck.position, head.position, 0.85f);
-            var fx = Instantiate(bloodFx, at, Quaternion.LookRotation(dir));
-            if (i == 0) fx.transform.localScale *= 1.3f;   // the big first burst
-            Destroy(fx, bloodLifetime);
+            float k = strength * Mathf.Pow(spurtFalloff, i);
+            main.startSpeedMultiplier = speed * k;
+            emission.rateOverTimeMultiplier = rate * Mathf.Lerp(0.5f, 1f, k);
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);   // keeps the drops in the air, restarts the jet
+            ps.Play(true);
             yield return new WaitForSeconds(spurtInterval);
         }
+        if (fx != null) Destroy(fx, bloodLifetime);
     }
 
     static Transform FindDeep(Transform root, string name)
