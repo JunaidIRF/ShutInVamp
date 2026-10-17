@@ -5,7 +5,8 @@ using UnityEngine.UI;
 
 /// <summary>
 /// A menu entry's feel: on hover the text slides right a touch, turns blood red and a red bar grows in
-/// front of it; a soft swish on hover and on click. Works with any Selectable (Button, the selector arrows).
+/// front of it; a soft tick on hover and a knock on click. Works with any Selectable (Button, the selector arrows).
+/// The sounds play through a paused game (the pause menu pauses the listener).
 /// </summary>
 public class MenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, ISelectHandler, IDeselectHandler
 {
@@ -28,7 +29,7 @@ public class MenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
     {
         if (label != null) labelRest = label.rectTransform.anchoredPosition;
         selectable = GetComponent<Selectable>();
-        if (selectable is Button b) b.onClick.AddListener(() => Play(clickSound, 1f));
+        if (selectable is Button b) b.onClick.AddListener(() => Play(clickSound, Random.Range(0.97f, 1.03f)));
     }
 
     void OnEnable() { over = false; t = 0f; Apply(); }
@@ -41,7 +42,7 @@ public class MenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
     void Enter()
     {
         if (selectable != null && !selectable.interactable) return;
-        if (!over) Play(hoverSound, Random.Range(1.1f, 1.25f));
+        if (!over) Play(hoverSound, Random.Range(0.95f, 1.05f));
         over = true;
     }
 
@@ -71,6 +72,7 @@ public class MenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
             source = go.AddComponent<AudioSource>();
             source.playOnAwake = false;
             source.spatialBlend = 0f;
+            source.ignoreListenerPause = true;
         }
         source.pitch = pitch;
         source.PlayOneShot(clip, volume);
