@@ -65,6 +65,8 @@ public class ExecutionData : ScriptableObject
     public float killHitSpeed = 1.8f;
     [Tooltip("Upward velocity change (m/s) so it leaves the ground a little")]
     public float killLift = 0.36f;
+    [Tooltip("The kill takes the victim's head off (needs a Decapitation on the enemy model)")]
+    public bool decapitateOnKill;
 
     [Header("Events")]
     public Event[] events;

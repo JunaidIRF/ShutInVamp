@@ -172,7 +172,7 @@ public class PlayerExecution : MonoBehaviour
     }
 
     void Kill(Shooter victim, ExecutionData data, Transform bone) =>
-        victim.FinishExecution(bone.position, BiteDirection(bone), data.killBodySpeed, data.killHitSpeed, data.killLift);
+        victim.FinishExecution(bone.position, BiteDirection(bone), data.killBodySpeed, data.killHitSpeed, data.killLift, data.decapitateOnKill);
 
     void Fire(ExecutionData.Event e, Shooter victim, Transform bone)
     {

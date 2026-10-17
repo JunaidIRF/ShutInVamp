@@ -886,6 +886,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 251b0ea2cac59bd42bec13c29748b997, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3377334243892157605}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 251b0ea2cac59bd42bec13c29748b997, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3228000077507545998}
     - targetCorrespondingSourceObject: {fileID: 1082271958561512970, guid: 251b0ea2cac59bd42bec13c29748b997, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3685602837985817275}
@@ -1303,6 +1306,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f0c2a3bd54e917341824938452263623, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Ragdoll
+--- !u!114 &3228000077507545998
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3591477690807155048}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21e02e05a68165447b95151b5454e1cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Decapitation
+  headBone: mixamorig:Head
+  neckBone: mixamorig:Neck
+  headSpeed: 4
+  headLift: 3
+  headSpin: 8
+  headMass: 4
+  headLifetime: 20
+  stumpColor: {r: 0.35, g: 0.02, b: 0.03, a: 1}
+  bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
+  spurts: 4
+  spurtInterval: 0.35
+  bloodLifetime: 9
 --- !u!1 &3608250417691826739 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1082271958561512970, guid: 251b0ea2cac59bd42bec13c29748b997, type: 3}

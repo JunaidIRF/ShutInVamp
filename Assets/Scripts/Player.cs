@@ -85,7 +85,7 @@ public class Player : MonoBehaviour
 
         Shooter shooter = hit.collider.GetComponentInParent<Shooter>();
         if (shooter == null || shooter.IsDead) return;
-        shooter.Hit(hit.point, cam.forward, punchDamage);   // hurts, but only parries stun (open executions)
+        shooter.Hit(hit.point, cam.forward, punchDamage, decapitateOnKill: true);   // a killing claw slash takes the head   // hurts, but only parries stun (open executions)
         if (juice != null) juice.Shake(punchShake, 0.15f);
     }
 

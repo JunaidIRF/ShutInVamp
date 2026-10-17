@@ -704,14 +704,19 @@ public class Shooter : MonoBehaviour
     /// A hit that hurts but doesn't stun (punches): damage, blood, flash and a squash; we keep fighting.
     /// Only parried stakes / kicks stun us (and so open executions).
     /// </summary>
-    public void Hit(Vector3 point, Vector3 direction, float damage)
+    public void Hit(Vector3 point, Vector3 direction, float damage, bool decapitateOnKill = false)
     {
         if (isDead || isExecuted) return;
         health = Mathf.Max(health - damage, 0f);
         UpdateHealthBar();
         Bleed(point, direction);
         if (hitFlash != null) hitFlash.Flash();
-        if (health <= 0f) { Die(point, direction); return; }
+        if (health <= 0f)
+        {
+            Die(point, direction);
+            if (decapitateOnKill) Decapitate(direction);
+            return;
+        }
         bounceStartTime = Time.time;
         bouncing = true;
     }
@@ -759,12 +764,21 @@ public class Shooter : MonoBehaviour
 
     /// <summary>The execution's kill moment: hand over to the ragdoll, pushed along <paramref name="direction"/>
     /// (speeds are velocity changes in m/s, like the death knock-back).</summary>
-    public void FinishExecution(Vector3 point, Vector3 direction, float bodySpeed, float hitSpeed, float lift)
+    public void FinishExecution(Vector3 point, Vector3 direction, float bodySpeed, float hitSpeed, float lift, bool decapitate = false)
     {
         if (isDead) return;
         health = 0f;
         UpdateHealthBar();
         Die(point, direction, bodySpeed, hitSpeed, lift);
+        if (decapitate) Decapitate(direction);
+    }
+
+    /// <summary>Head off (after the ragdoll has taken over), if the model has a Decapitation.</summary>
+    void Decapitate(Vector3 direction)
+    {
+        Decapitation d = anim != null ? anim.GetComponent<Decapitation>() : null;
+        if (d == null) d = GetComponentInChildren<Decapitation>();
+        if (d != null) d.Decapitate(direction);
     }
 
     void UpdateHealthBar()
