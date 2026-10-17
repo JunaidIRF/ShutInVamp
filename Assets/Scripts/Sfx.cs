@@ -9,6 +9,8 @@ using UnityEngine;
 public class Sfx
 {
     public AudioClip clip;
+    [Tooltip("More takes of the same sound: each play picks one of these or the clip at random")]
+    public AudioClip[] alternatives;
     [Range(0f, 1f)] public float volume = 1f;
     [Tooltip("Each play picks a pitch in this range")]
     public Vector2 pitch = new Vector2(0.95f, 1.05f);
@@ -22,6 +24,15 @@ public class Sfx
     public void PlayAt(Vector3 at) => SfxPlayer.Play(this, at);
 
     public float RandomPitch() => Random.Range(Mathf.Min(pitch.x, pitch.y), Mathf.Max(pitch.x, pitch.y));
+
+    /// <summary>The clip or one of its alternatives, at random.</summary>
+    public AudioClip RandomClip()
+    {
+        int extra = alternatives != null ? alternatives.Length : 0;
+        int i = Random.Range(0, extra + 1);
+        AudioClip c = i == 0 ? clip : alternatives[i - 1];
+        return c != null ? c : clip;
+    }
 }
 
 /// <summary>One-shot sound effects from a small pool of AudioSources, made on first use.</summary>
@@ -40,7 +51,7 @@ public static class SfxPlayer
         if (sfx == null || sfx.clip == null || !Application.isPlaying) return null;
         AudioSource src = Voice();
         src.transform.position = at;
-        src.clip = sfx.clip;
+        src.clip = sfx.RandomClip();
         src.volume = sfx.volume;
         src.pitch = sfx.RandomPitch();
         src.spatialBlend = sfx.spatial;

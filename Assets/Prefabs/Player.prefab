@@ -9097,12 +9097,19 @@ MonoBehaviour:
   punchHitDelay: 0.1
   punchShake: 0.8
   clawSound:
-    clip: {fileID: 8300000, guid: 3eee824139361c54bb8eb962ac023ea2, type: 3}
-    volume: 0.7
-    pitch: {x: 1, y: 1.25}
+    clip: {fileID: 8300000, guid: b03f4a9dd0a781f4ab15003384211e43, type: 3}
+    alternatives:
+    - {fileID: 8300000, guid: 0cf3f257d6d08a74ab1241149f16e44d, type: 3}
+    - {fileID: 8300000, guid: 539a0f0e4610f4242894f81a5415af1d, type: 3}
+    - {fileID: 8300000, guid: 65cb507884c1a1045842783c6c97892b, type: 3}
+    - {fileID: 8300000, guid: 1a860f077e95f184283f9b448ee1baad, type: 3}
+    - {fileID: 8300000, guid: 169c764a22da6b94f92cfdee8af2ac39, type: 3}
+    volume: 0.8
+    pitch: {x: 0.95, y: 1.12}
     spatial: 0
   clawHitSound:
     clip: {fileID: 8300000, guid: 8cd8a96b8f55e4e44b421757e942fa43, type: 3}
+    alternatives: []
     volume: 0.9
     pitch: {x: 0.9, y: 1.1}
     spatial: 0
@@ -9192,6 +9199,7 @@ MonoBehaviour:
   slideShake: 0.12
   slideSound:
     clip: {fileID: 8300000, guid: cdeb387fc9b2bb540bbb07c0bc9dc9b7, type: 3}
+    alternatives: []
     volume: 0.8
     pitch: {x: 0.93, y: 1.07}
     spatial: 0
@@ -9326,24 +9334,32 @@ MonoBehaviour:
   parryTag: Parry
   juice: {fileID: 5879824131008612246}
   parrySwingSound:
-    clip: {fileID: 8300000, guid: 3eee824139361c54bb8eb962ac023ea2, type: 3}
-    volume: 0.75
-    pitch: {x: 0.82, y: 0.98}
+    clip: {fileID: 8300000, guid: acbd2116c0e09794cb2048d1b534bdbd, type: 3}
+    alternatives:
+    - {fileID: 8300000, guid: 5e4793c9ad06ff5469c9870c90298d8b, type: 3}
+    - {fileID: 8300000, guid: dd3bf84ea89de3e4bafd8d216fd9374d, type: 3}
+    - {fileID: 8300000, guid: 99f4a1630cf5b2c4b82ff1bf3435bffe, type: 3}
+    - {fileID: 8300000, guid: 7256d70e48ce40f49837bc996be53b27, type: 3}
+    volume: 0.85
+    pitch: {x: 0.85, y: 0.97}
     spatial: 0
   parrySound:
     clip: {fileID: 8300000, guid: e9875c052bddfe146a424f47bee56d71, type: 3}
+    alternatives: []
     volume: 1
     pitch: {x: 0.95, y: 1.05}
     spatial: 0
   blockSound:
     clip: {fileID: 8300000, guid: 227c71fd11a39df478479a554af8a85a, type: 3}
+    alternatives: []
     volume: 0.9
     pitch: {x: 0.92, y: 1.08}
     spatial: 0
   stakeHitSound:
-    clip: {fileID: 8300000, guid: 4699f372b25eb2e4db690528a1bdb49d, type: 3}
+    clip: {fileID: 8300000, guid: 2fcf638bb5b1a4649ba43ae821989e51, type: 3}
+    alternatives: []
     volume: 0.9
-    pitch: {x: 0.9, y: 1.1}
+    pitch: {x: 0.92, y: 1.08}
     spatial: 0
   threats: {fileID: 2338265075378460233}
   guardVisuals: {fileID: 3031849400596410963}
@@ -9462,11 +9478,13 @@ MonoBehaviour:
   burnTickInterval: 0.5
   burnLoop:
     clip: {fileID: 8300000, guid: 54a71b45c7945b74faa83e70deb02e43, type: 3}
+    alternatives: []
     volume: 0.6
     pitch: {x: 0.95, y: 1.05}
     spatial: 0
   burnTick:
     clip: {fileID: 8300000, guid: cb93fd2789382ad42a0d415f7ea51a0c, type: 3}
+    alternatives: []
     volume: 0.75
     pitch: {x: 0.9, y: 1.1}
     spatial: 0
@@ -9507,11 +9525,13 @@ MonoBehaviour:
   maxAngle: 55
   executionSound:
     clip: {fileID: 8300000, guid: 9911e531a64444d42add9debcfa2e01b, type: 3}
+    alternatives: []
     volume: 1
     pitch: {x: 0.97, y: 1.03}
     spatial: 0
   bloodSound:
     clip: {fileID: 8300000, guid: 6aa8aec87881f8744b472afcbc235a0e, type: 3}
+    alternatives: []
     volume: 0.9
     pitch: {x: 0.9, y: 1.1}
     spatial: 0.6
