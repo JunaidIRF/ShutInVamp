@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -32,6 +33,22 @@ public class Ragdoll : MonoBehaviour
             b.isKinematic = !on;
             b.interpolation = on ? RigidbodyInterpolation.Interpolate : RigidbodyInterpolation.None;
         }
+    }
+
+    /// <summary>
+    /// Lets go of <paramref name="bone"/> and everything under it (it was cut off): their joints, bodies and
+    /// colliders are removed, so the bones just follow their parent.
+    /// </summary>
+    public void Detach(Transform bone)
+    {
+        var gone = new HashSet<Rigidbody>(bone.GetComponentsInChildren<Rigidbody>(true));
+        foreach (var j in GetComponentsInChildren<Joint>(true))
+            if (gone.Contains(j.GetComponent<Rigidbody>()) || (j.connectedBody != null && gone.Contains(j.connectedBody)))
+                DestroyImmediate(j);   // joints before the bodies they need
+        foreach (var c in bone.GetComponentsInChildren<Collider>(true)) DestroyImmediate(c);
+        foreach (var b in gone) DestroyImmediate(b);
+        bodies = System.Array.FindAll(bodies, b => b != null);
+        colliders = System.Array.FindAll(colliders, c => c != null);
     }
 
     /// <summary>

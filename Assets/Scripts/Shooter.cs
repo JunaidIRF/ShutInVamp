@@ -702,9 +702,10 @@ public class Shooter : MonoBehaviour
 
     /// <summary>
     /// A hit that hurts but doesn't stun (punches): damage, blood, flash and a squash; we keep fighting.
-    /// Only parried stakes / kicks stun us (and so open executions).
+    /// Only parried stakes / kicks stun us (and so open executions). A killing blow with
+    /// <paramref name="severOnKill"/> cuts off the part it lands on (head, arm, leg).
     /// </summary>
-    public void Hit(Vector3 point, Vector3 direction, float damage, bool decapitateOnKill = false)
+    public void Hit(Vector3 point, Vector3 direction, float damage, bool severOnKill = false)
     {
         if (isDead || isExecuted) return;
         health = Mathf.Max(health - damage, 0f);
@@ -713,8 +714,11 @@ public class Shooter : MonoBehaviour
         if (hitFlash != null) hitFlash.Flash();
         if (health <= 0f)
         {
+            // pick the part in the pose the blow landed on, before dying changes it
+            Dismemberment cut = severOnKill ? FindDismemberment() : null;
+            Dismemberment.Part part = cut != null ? cut.PartAt(point, direction) : null;
             Die(point, direction);
-            if (decapitateOnKill) Decapitate(direction);
+            if (part != null) cut.Sever(part, direction);
             return;
         }
         bounceStartTime = Time.time;
@@ -770,15 +774,13 @@ public class Shooter : MonoBehaviour
         health = 0f;
         UpdateHealthBar();
         Die(point, direction, bodySpeed, hitSpeed, lift);
-        if (decapitate) Decapitate(direction);
+        if (decapitate) { var cut = FindDismemberment(); if (cut != null) cut.Sever("Head", direction); }
     }
 
-    /// <summary>Head off (after the ragdoll has taken over), if the model has a Decapitation.</summary>
-    void Decapitate(Vector3 direction)
+    Dismemberment FindDismemberment()
     {
-        Decapitation d = anim != null ? anim.GetComponent<Decapitation>() : null;
-        if (d == null) d = GetComponentInChildren<Decapitation>();
-        if (d != null) d.Decapitate(direction);
+        Dismemberment d = anim != null ? anim.GetComponent<Dismemberment>() : null;
+        return d != null ? d : GetComponentInChildren<Dismemberment>();
     }
 
     void UpdateHealthBar()

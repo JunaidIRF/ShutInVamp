@@ -1318,21 +1318,40 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21e02e05a68165447b95151b5454e1cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Decapitation
-  headBone: mixamorig:Head
-  neckBone: mixamorig:Neck
-  headSpeed: 4
-  headLift: 3
-  headSpin: 8
-  headMass: 4
-  headLifetime: 20
+  parts:
+  - name: Head
+    bone: mixamorig:Head
+    stumpSize: 0.1
+    mass: 4
+  - name: Left Arm
+    bone: mixamorig:LeftArm
+    stumpSize: 0.09
+    mass: 3
+  - name: Right Arm
+    bone: mixamorig:RightArm
+    stumpSize: 0.09
+    mass: 3
+  - name: Left Leg
+    bone: mixamorig:LeftUpLeg
+    stumpSize: 0.15
+    mass: 6
+  - name: Right Leg
+    bone: mixamorig:RightUpLeg
+    stumpSize: 0.15
+    mass: 6
+  maxHitDistance: 0.35
+  pieceSpeed: 4
+  pieceLift: 3
+  pieceSpin: 8
+  pieceLifetime: 20
   stumpColor: {r: 0.35, g: 0.02, b: 0.03, a: 1}
   bloodFx: {fileID: 3654356420683697179, guid: 1d3f496a985822e43b749ca4e7c1c3db, type: 3}
-  neckBloodFx: {fileID: 3654356420683697179, guid: 512ed9afcf5c09f408fde5149cd32327, type: 3}
+  jetFx: {fileID: 3654356420683697179, guid: 512ed9afcf5c09f408fde5149cd32327, type: 3}
   spurts: 5
   spurtInterval: 0.32
   spurtFalloff: 0.82
-  headSpurts: 2
-  headSpurtStrength: 0.6
+  pieceSpurts: 2
+  pieceSpurtStrength: 0.6
   bloodLifetime: 9
 --- !u!1 &3608250417691826739 stripped
 GameObject:

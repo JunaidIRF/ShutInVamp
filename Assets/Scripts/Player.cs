@@ -85,7 +85,10 @@ public class Player : MonoBehaviour
 
         Shooter shooter = hit.collider.GetComponentInParent<Shooter>();
         if (shooter == null || shooter.IsDead) return;
-        shooter.Hit(hit.point, cam.forward, punchDamage, decapitateOnKill: true);   // a killing claw slash takes the head   // hurts, but only parries stun (open executions)
+        // hurts, but only parries stun (open executions); a killing slash cuts off the part it lands on.
+        // A cast that starts inside the collider reports no point: any point on the aim line will do
+        Vector3 point = hit.distance > 0f ? hit.point : cam.position;
+        shooter.Hit(point, cam.forward, punchDamage, severOnKill: true);
         if (juice != null) juice.Shake(punchShake, 0.15f);
     }
 
