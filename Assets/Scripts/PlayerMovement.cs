@@ -37,8 +37,6 @@ public class PlayerMovement : MonoBehaviour
     [Header("Ground Check")]
     public float groundCheckRadius = 0.3f;
     public float groundCheckDistance = 0.15f;
-    [Tooltip("Resting on something too thin or steep to stand on (a pole top, a rubble spike) slides you off it this fast (m/s)")]
-    public float perchSlideSpeed = 4f;
     public LayerMask groundMask = ~0;       // set in inspector to exclude player layer
 
     [Header("Crouch")]
@@ -110,8 +108,6 @@ public class PlayerMovement : MonoBehaviour
 
     [HideInInspector] public Vector3 velocity;
     [HideInInspector] public bool isGrounded;
-    bool perched;               // last move rested on a contact under the feet too steep to be ground
-    Vector3 perchPoint;
     [HideInInspector] public bool isSprinting;
     [HideInInspector] public float baseFov = 90f;
      public bool isCrouching;
@@ -192,7 +188,6 @@ public class PlayerMovement : MonoBehaviour
         float fallSpeed = -velocity.y;
 
         UpdateGroundCheck();
-        Vector3 perchStep = PerchStep(Time.deltaTime);
 
         // Landing this frame
         if (isGrounded && !wasGroundedLastFrame && playParticlesOnLand && fallSpeed >= minLandFallSpeed)
@@ -213,7 +208,7 @@ public class PlayerMovement : MonoBehaviour
 
         ApplyGravity();
         // knockback rides on top of the walk velocity (which HandleMovement rewrites every frame)
-        controller.Move(velocity * Time.deltaTime + KnockbackStep(Time.deltaTime) + perchStep);
+        controller.Move(velocity * Time.deltaTime + KnockbackStep(Time.deltaTime));
 
         if (enableBob && movementEnabled)
             HandleHeadBob();
@@ -255,28 +250,8 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Held up by something you can't stand on (no ground under the feet, only a steep contact like a pole's
-    /// tip): pushed off sideways, away from it, so you drop instead of hanging there unable to jump.
-    /// </summary>
-    Vector3 PerchStep(float dt)
-    {
-        bool was = perched;
-        perched = false;   // the coming Move sets it again if we're still resting on it
-        if (!was || isGrounded) return Vector3.zero;
-        Vector3 away = transform.position - perchPoint;
-        away.y = 0f;
-        if (away.sqrMagnitude < 0.0001f) away = transform.forward;   // dead on top: off forwards
-        if (velocity.y < -2f) velocity.y = -2f;                         // no fall speed piling up while held up there
-        return away.normalized * perchSlideSpeed * dt;
-    }
-
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        // a contact under the feet too steep to be ground: we're perched on it
-        float footSphere = transform.position.y + controller.center.y - controller.height * 0.5f + controller.radius;
-        if (hit.point.y < footSphere && hit.normal.y <= 0.5f) { perched = true; perchPoint = hit.point; }
-
         // Only count contacts beneath us that are on the ground mask
         if (hit.normal.y > 0.5f && (groundMask.value & (1 << hit.gameObject.layer)) != 0)
             controllerGroundContact = true;
