@@ -27,6 +27,9 @@ public class Shooter : MonoBehaviour
     public float bulletSpeed = 15f;
     public float damage = 20f;
     public float throwReleaseDelay = 0.28f; // wind-up before the stake leaves the hand (the Throw clip's release frame)
+    [Tooltip("A stake model under the right hand: shown from the draw to the release, then the real one flies from where it is")]
+    public Transform heldStake;
+    public float stakeDrawTime = 0.16f;     // into the throw when the hand has pulled the stake (the Throw clip's draw frame)
 
     [Header("Group")]
     // with several enemies: only maxThrowers throw at once (a turn lasts the wind-up + throwTurnHold), and
@@ -552,6 +555,7 @@ public class Shooter : MonoBehaviour
     /// The spine is rewritten by the Animator every frame, so its counter-turn is relative.</summary>
     void LateUpdate()
     {
+        UpdateHeldStake();   // after the Animator has posed the hand
         if (isDead || isExecuted || hipsBone == null) return;
         float yaw = legYaw * legsWeight;
         if (Mathf.Abs(yaw) < 0.01f)
@@ -641,16 +645,37 @@ public class Shooter : MonoBehaviour
     {
         if (bulletPrefab == null || muzzle == null) return;
 
-        Vector3 aim = targetCollider != null ? AimAroundBody(targetCollider.bounds) : target.position;
-        Bullet bullet = Instantiate(bulletPrefab, muzzle.position, Quaternion.identity);
-        throwSound?.PlayAt(muzzle.position);
-        bullet.Launch(aim - muzzle.position, bulletSpeed, damage, this);
+        // from the hand that holds it (the muzzle if there's no stake model)
+        Vector3 from = heldStake != null && heldStake.gameObject.activeInHierarchy ? heldStake.position : muzzle.position;
+        Vector3 aim = targetCollider != null ? AimAroundBody(targetCollider.bounds, from) : target.position;
+        Bullet bullet = Instantiate(bulletPrefab, from, Quaternion.LookRotation(aim - from));
+        throwSound?.PlayAt(from);
+        bullet.Launch(aim - from, bulletSpeed, damage, this);
+        if (heldStake != null) heldStake.gameObject.SetActive(false);
     }
 
-    /// <summary>Random point on the target's silhouette as seen from the muzzle, in any direction from its centre.</summary>
-    Vector3 AimAroundBody(Bounds body)
+    /// <summary>
+    /// The stake in the hand: there from the draw until it's thrown (or the throw is cut short). Its tip turns from
+    /// pointing down (just pulled from the hip) to aimed at the target as the arm comes up.
+    /// </summary>
+    void UpdateHeldStake()
     {
-        Vector3 toTarget = body.center - muzzle.position;
+        if (heldStake == null) return;
+        float drawn = releaseTime - throwReleaseDelay + stakeDrawTime;   // when the hand got it
+        bool show = releaseTime >= 0f && !isDead && !isExecuted && Time.time >= drawn;
+        if (heldStake.gameObject.activeSelf != show) heldStake.gameObject.SetActive(show);
+        if (!show) return;
+        float k = Mathf.SmoothStep(0f, 1f, (Time.time - drawn) / Mathf.Max(0.01f, (throwReleaseDelay - stakeDrawTime) * 0.6f));
+        Vector3 toTarget = target != null ? (targetCollider != null ? targetCollider.bounds.center : target.position) - heldStake.position : transform.forward;
+        Vector3 down = Vector3.down - transform.forward * 0.3f;
+        Vector3 dir = Vector3.Slerp(down.normalized, toTarget.normalized, k);
+        if (dir.sqrMagnitude > 0.0001f) heldStake.rotation = Quaternion.LookRotation(dir, transform.forward);
+    }
+
+    /// <summary>Random point on the target's silhouette as seen from <paramref name="from"/>, in any direction from its centre.</summary>
+    Vector3 AimAroundBody(Bounds body, Vector3 from)
+    {
+        Vector3 toTarget = body.center - from;
         toTarget.y = 0f;
         Vector3 side = Vector3.Cross(Vector3.up, toTarget).normalized;
 
