@@ -393,6 +393,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: 0.61539316
       objectReference: {fileID: 0}
+    - target: {fileID: 4637380688565286437, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AdditionalShaderChannelsFlag
+      value: 25
+      objectReference: {fileID: 0}
     - target: {fileID: 5446419775191248859, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_Name
       value: Player
@@ -404,6 +408,10 @@ PrefabInstance:
     - target: {fileID: 5794157458762835431, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: guardKey
       value: 118
+      objectReference: {fileID: 0}
+    - target: {fileID: 5908457483490063450, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AdditionalShaderChannelsFlag
+      value: 25
       objectReference: {fileID: 0}
     - target: {fileID: 6082890605949502124, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_Enabled
@@ -1957,7 +1965,7 @@ MonoBehaviour:
   - {fileID: 1055546266}
   - {fileID: 357743341}
   - {fileID: 71961532}
-  spawnFx: {fileID: 725748389856807714, guid: 4bda94453d2ca7444a0fff05b2d425f5, type: 3}
+  spawnFx: {fileID: 725748389856807714, guid: 72deff492fed74648ae8e301db2c62e9, type: 3}
   spawnWarning: 0.7
   minSpawnDistance: 8
   hiddenAngle: 70
@@ -1982,6 +1990,9 @@ MonoBehaviour:
   sinkTime: 2.5
   sinkDepth: 1.8
   deathPause: 4
+  blocks: []
+  respawnPoint: {fileID: 0}
+  deathScreen: {fileID: 0}
 --- !u!4 &1864978336
 Transform:
   m_ObjectHideFlags: 0

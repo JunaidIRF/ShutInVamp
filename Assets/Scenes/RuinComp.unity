@@ -5347,6 +5347,26 @@ PrefabInstance:
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
       objectReference: {fileID: 0}
+    - target: {fileID: 2176356394204053265, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2176356394204053265, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2176356394204053265, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2261525355536299810, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2261525355536299810, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3789440932886202106, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_TextStyleHashCode
       value: -1183493901
@@ -5391,6 +5411,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4228633038046508686, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4228633038046508686, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4363342373587521725, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_LocalPosition.y
       value: -0.40189743
@@ -5398,6 +5426,22 @@ PrefabInstance:
     - target: {fileID: 4363342373587521725, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_LocalPosition.z
       value: 0.61539316
+      objectReference: {fileID: 0}
+    - target: {fileID: 4637380688565286437, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AdditionalShaderChannelsFlag
+      value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 5094602648480956381, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5094602648480956381, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5094602648480956381, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5285901070158733136, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
       propertyPath: m_fontColor32.rgba
@@ -6608,7 +6652,7 @@ MonoBehaviour:
   - {fileID: 1536949914}
   - {fileID: 1067545914}
   - {fileID: 381934336}
-  spawnFx: {fileID: 725748389856807714, guid: 4bda94453d2ca7444a0fff05b2d425f5, type: 3}
+  spawnFx: {fileID: 725748389856807714, guid: 72deff492fed74648ae8e301db2c62e9, type: 3}
   spawnWarning: 0.7
   minSpawnDistance: 8
   hiddenAngle: 70
