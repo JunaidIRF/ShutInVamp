@@ -150,7 +150,7 @@ namespace JunaidIRF.SyncedInteractions
     [Serializable]
     public class ReleaseRoleAction : InteractionAction
     {
-        [Tooltip("Empty = the event's role")]
+        [InteractionRoleName, Tooltip("Empty = the event's role")]
         public string role = "";
         public override void Fire(InteractionContext c) => c.handle.Release(string.IsNullOrEmpty(role) ? c.handle.RoleOf(c.actor) : role);
         public override string MenuName => "Release Role";

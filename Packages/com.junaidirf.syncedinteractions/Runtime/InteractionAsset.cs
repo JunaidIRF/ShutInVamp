@@ -40,7 +40,7 @@ namespace JunaidIRF.SyncedInteractions
 
         [Header("Placement")]
         public AnchorMode anchor = AnchorMode.Role;
-        [Tooltip("With Anchor: Role, the role the slots are measured from (it stays where it is)")]
+        [InteractionRoleName, Tooltip("With Anchor: Role, the role the slots are measured from (it stays where it is)")]
         public string anchorRole = "Receiver";
         public AlignMode align = AlignMode.Glide;
         [Min(0f)] public float alignTime = 0.25f;
@@ -132,7 +132,7 @@ namespace JunaidIRF.SyncedInteractions
         public float yaw;
         [Tooltip("Moved onto its slot before it starts. Off: stays where it is (the anchor role always does)")]
         public bool moveToSlot = true;
-        [Tooltip("Turn to look at another role's bone while lining up (first-person cameras, eye contact). Empty = keep the slot's facing")]
+        [InteractionRoleName, Tooltip("Turn to look at another role's bone while lining up (first-person cameras, eye contact). Empty = keep the slot's facing")]
         public string lookAtRole;
         [InteractionBone, Tooltip("The bone to look at on Look At Role (empty = its root, at head height)")]
         public string lookAtBone;
@@ -164,7 +164,7 @@ namespace JunaidIRF.SyncedInteractions
         public string name = "Event";
         [HideInInspector] public string id;
         [Min(0f)] public float time;
-        [Tooltip("The role it happens to (its character is the actions' target). Empty = the first role")]
+        [InteractionRoleName, Tooltip("The role it happens to (its character is the actions' target). Empty = the first role")]
         public string role;
         [InteractionBone, Tooltip("Where on that character it happens (sounds, effects). Empty = the character's root")]
         public string bone;
@@ -175,4 +175,7 @@ namespace JunaidIRF.SyncedInteractions
 
     /// <summary>A string holding a bone name: a bone picker in the inspector (humanoid bones by name, or any child's name).</summary>
     public class InteractionBoneAttribute : PropertyAttribute { }
+
+    /// <summary>A string holding a role's name: a menu of the asset's roles in the inspector.</summary>
+    public class InteractionRoleNameAttribute : PropertyAttribute { }
 }

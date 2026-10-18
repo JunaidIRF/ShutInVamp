@@ -1,0 +1,14 @@
+{
+    "name": "JunaidIRF.SyncedInteractions.Editor",
+    "rootNamespace": "JunaidIRF.SyncedInteractions.Editor",
+    "references": [ "JunaidIRF.SyncedInteractions", "Unity.Timeline", "Unity.Timeline.Editor" ],
+    "includePlatforms": [ "Editor" ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
