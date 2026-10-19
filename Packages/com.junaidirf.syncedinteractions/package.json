@@ -8,8 +8,7 @@
   "author": { "name": "JunaidIRF", "url": "https://github.com/JunaidIRF" },
   "repository": {
     "type": "git",
-    "url": "https://github.com/JunaidIRF/ShutInVamp.git",
-    "directory": "Packages/com.junaidirf.syncedinteractions"
+    "url": "https://github.com/JunaidIRF/SyncedInteractions.git"
   },
   "keywords": [ "animation", "interaction", "synced", "paired", "execution", "takedown", "handshake", "playables", "dual-rig" ],
   "dependencies": {

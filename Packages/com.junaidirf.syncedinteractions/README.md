@@ -1,9 +1,15 @@
 <div align="center">
 
+<img src="Documentation~/icon.svg" width="128" height="128" alt="Synced Interactions Logo" />
+
 # 🎭 Synced Interactions for Unity
 
 **Synchronized multi-character animations with zero Animator Controller edits.**<br/>
 Paired executions, co-op takedowns, handshakes, hugs, and group interactions driven in lockstep from a single master clock.
+
+<p align="center">
+  <img src="https://skillicons.dev/icons?i=unity,cs,git,github" alt="Unity, C#, Git, GitHub" />
+</p>
 
 [![UPM Version](https://img.shields.io/badge/UPM-v0.2.0-blue.svg?style=for-the-badge&logo=unity)](package.json)
 [![Unity 6000+](https://img.shields.io/badge/Unity-6000%2B%20%7C%202022.3%2B-blue.svg?style=for-the-badge&logo=unity)](https://unity.com/)
