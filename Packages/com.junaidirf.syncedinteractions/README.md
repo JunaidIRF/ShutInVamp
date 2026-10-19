@@ -192,8 +192,8 @@ public class BloodSplatterAction : InteractionAction, IInteractionPreviewAction
 
 ## 🎮 Runtime API
 
-### Dynamic Veto (`IInteractionVeto`)
-Implement `IInteractionVeto` on any character script to dynamically block interactions (e.g. target is invulnerable, dead, or not stunned):
+### Dynamic Veto / Interaction Blocker (`IInteractionVeto`)
+A **Veto** simply means **"saying NO"** to an interaction. Implement `IInteractionVeto` on any character script to dynamically check conditions and block an interaction before it can start (for example: target is not stunned yet, is already dead, or is currently invincible):
 
 ```csharp
 public class EnemyState : MonoBehaviour, IInteractionVeto

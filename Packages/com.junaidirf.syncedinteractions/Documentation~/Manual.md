@@ -282,7 +282,7 @@ public class CombatController : MonoBehaviour
 ## 9. Vetoes & Participant Callbacks
 
 ### Preventing Interactions with Vetoes (`IInteractionVeto`)
-Implement `IInteractionVeto` on any component on the character to reject interactions dynamically:
+A **Veto** means "saying NO" or blocking an interaction before it begins. Implement `IInteractionVeto` on any character component to check gameplay conditions and reject interactions dynamically (e.g. if an enemy is not stunned yet, is already dead, or is dodging):
 
 ```csharp
 using UnityEngine;
