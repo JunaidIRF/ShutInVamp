@@ -25,6 +25,7 @@ namespace JunaidIRF.SyncedInteractions.Editor
         const string SessionReturn = "SyncedInteractions.DualRig.Return";
         const string Folder = "Assets/SyncedInteractionsStage";
         const string StageScenePath = Folder + "/RigStage.unity";
+        const string EventMarkerName = "Event";
 
         static int lastDirty = -1;
         static double nextPoll;
@@ -42,6 +43,9 @@ namespace JunaidIRF.SyncedInteractions.Editor
         public static void Open(InteractionAsset asset)
         {
             if (asset == null) return;
+            string assetPath = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(assetPath)) return;
+
             var missing = InteractionStage.Missing(asset);
             if (missing.Count > 0)
             {
@@ -63,23 +67,28 @@ namespace JunaidIRF.SyncedInteractions.Editor
             open.Remove(active);
             if (!string.IsNullOrEmpty(active)) open.Insert(0, active);
             SessionState.SetString(SessionReturn, string.Join("|", open));
-            SessionState.SetString(SessionAsset, AssetDatabase.GetAssetPath(asset));
+            SessionState.SetString(SessionAsset, assetPath);
 
             if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets", "SyncedInteractionsStage");
 
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
-            EditorSceneManager.SaveScene(scene, StageScenePath);
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            var light = new GameObject("Directional Light").AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.2f;
+            light.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Ground";
+            ground.name = "Floor";
             ground.transform.localScale = Vector3.one * 2f;
 
-            string assetPath = AssetDatabase.GetAssetPath(asset);
             asset = AssetDatabase.LoadAssetAtPath<InteractionAsset>(assetPath);
 
             AnimationClip editClip = BuildEditingClip(asset);
             var ctrl = BuildRigController(editClip, $"{Folder}/{asset.name}_Rig.controller");
             GameObject rig = BuildRig(asset, ctrl);
+
+            EditorSceneManager.SaveScene(scene, StageScenePath);
 
             SessionState.SetString(SessionClip, AssetDatabase.GetAssetPath(editClip));
             lastDirty = EditorUtility.GetDirtyCount(editClip);
@@ -110,6 +119,13 @@ namespace JunaidIRF.SyncedInteractions.Editor
         public static void Close()
         {
             if (IsOpen) ApplyNow();
+
+            var aw = Resources.FindObjectsOfTypeAll<AnimationWindow>().FirstOrDefault();
+            if (aw != null)
+            {
+                aw.previewing = false;
+                aw.animationClip = null;
+            }
 
             var back = SessionState.GetString(SessionReturn, "").Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
             SessionState.EraseString(SessionReturn);
@@ -147,12 +163,23 @@ namespace JunaidIRF.SyncedInteractions.Editor
                 var role = asset.roles[i];
                 if (role?.clip == null) continue;
                 string prefix = role.name;
+
+                // Float curves
                 foreach (var b in AnimationUtility.GetCurveBindings(role.clip))
                 {
                     var curve = AnimationUtility.GetEditorCurve(role.clip, b);
                     string newPath = string.IsNullOrEmpty(b.path) ? prefix : $"{prefix}/{b.path}";
                     var rebased = new EditorCurveBinding { path = newPath, propertyName = b.propertyName, type = b.type };
                     AnimationUtility.SetEditorCurve(clip, rebased, curve);
+                }
+
+                // Object reference curves (sprites, materials, etc.)
+                foreach (var b in AnimationUtility.GetObjectReferenceCurveBindings(role.clip))
+                {
+                    var keyframes = AnimationUtility.GetObjectReferenceCurve(role.clip, b);
+                    string newPath = string.IsNullOrEmpty(b.path) ? prefix : $"{prefix}/{b.path}";
+                    var rebased = new EditorCurveBinding { path = newPath, propertyName = b.propertyName, type = b.type };
+                    AnimationUtility.SetObjectReferenceCurve(clip, rebased, keyframes);
                 }
             }
 
@@ -161,7 +188,12 @@ namespace JunaidIRF.SyncedInteractions.Editor
             foreach (var e in asset.events)
             {
                 if (e == null) continue;
-                markers.Add(new AnimationEvent { time = e.time, functionName = string.IsNullOrEmpty(e.name) ? "Event" : e.name, stringParameter = e.id });
+                markers.Add(new AnimationEvent
+                {
+                    time = e.time,
+                    functionName = EventMarkerName,
+                    stringParameter = e.Label
+                });
             }
             AnimationUtility.SetAnimationEvents(clip, markers.OrderBy(m => m.time).ToArray());
 
@@ -198,21 +230,70 @@ namespace JunaidIRF.SyncedInteractions.Editor
             rig.AddComponent<Animator>().runtimeAnimatorController = ctrl;
 
             int anchor = asset.anchor == AnchorMode.Role ? Mathf.Max(0, asset.RoleIndex(asset.anchorRole)) : -1;
+            var animatedRoots = new Transform[asset.roles.Count];
+
             for (int i = 0; i < asset.roles.Count; i++)
             {
                 var role = asset.roles[i];
                 var go = (GameObject)Object.Instantiate(role.previewPrefab);
-                go.name = role.name;
                 Pose slot = i == anchor ? new Pose(Vector3.zero, Quaternion.identity) : role.Slot;
                 go.transform.SetPositionAndRotation(new Vector3(slot.position.x, FeetBelowPivot(go), slot.position.z), slot.rotation);
-                go.transform.SetParent(rig.transform, true);
 
-                // Disable child animators so only root Animator drives the dual hierarchy
-                foreach (var anim in go.GetComponentsInChildren<Animator>(true))
+                var actor = go.GetComponent<InteractionActor>();
+                var anim = actor != null && actor.animator != null ? actor.animator : go.GetComponentInChildren<Animator>(true);
+
+                Transform animatedRoot;
+                if (anim != null && anim.gameObject != go)
                 {
-                    anim.enabled = false;
+                    // The animated hierarchy (skeleton, meshes, hands) is under a child (e.g. Model or Camera Head).
+                    // Reparent this child directly under the rig as role.name, preserving its world position and rotation.
+                    animatedRoot = anim.transform;
+                    animatedRoot.SetParent(rig.transform, true);
+                    animatedRoot.name = role.name;
+                    Object.DestroyImmediate(go);
+                }
+                else
+                {
+                    // The animated hierarchy is the root prefab itself.
+                    animatedRoot = go.transform;
+                    animatedRoot.name = role.name;
+                    animatedRoot.SetParent(rig.transform, true);
+                }
+
+                // Destroy child animators so only root Animator drives the dual hierarchy
+                foreach (var a in animatedRoot.GetComponentsInChildren<Animator>(true))
+                {
+                    Object.DestroyImmediate(a);
+                }
+
+                animatedRoots[i] = animatedRoot;
+            }
+
+            // Align roles that look at another role/bone
+            for (int i = 0; i < asset.roles.Count; i++)
+            {
+                var role = asset.roles[i];
+                if (string.IsNullOrEmpty(role.lookAtRole) || animatedRoots[i] == null) continue;
+
+                int targetIndex = asset.RoleIndex(role.lookAtRole);
+                if (targetIndex < 0 || animatedRoots[targetIndex] == null) continue;
+
+                var targetRoot = animatedRoots[targetIndex];
+                Transform targetBone = !string.IsNullOrEmpty(role.lookAtBone)
+                    ? targetRoot.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == role.lookAtBone)
+                    : null;
+
+                Vector3 focus = targetBone != null ? targetBone.position : targetRoot.position + Vector3.up * 1.4f;
+                Transform cam = animatedRoots[i].GetComponentsInChildren<Camera>(true).Select(c => c.transform).FirstOrDefault() ?? animatedRoots[i];
+
+                Vector3 dir = (focus - cam.position).normalized;
+                if (dir.sqrMagnitude > 0.0001f)
+                {
+                    float pitch = Mathf.Clamp(-Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg, -89f, 89f);
+                    animatedRoots[i].localRotation = Quaternion.Euler(pitch, animatedRoots[i].localEulerAngles.y, 0f);
                 }
             }
+
             return rig;
         }
 
@@ -240,6 +321,8 @@ namespace JunaidIRF.SyncedInteractions.Editor
             if (edit == null || asset == null) return;
 
             var bindings = AnimationUtility.GetCurveBindings(edit);
+            var objBindings = AnimationUtility.GetObjectReferenceCurveBindings(edit);
+
             for (int i = 0; i < asset.roles.Count; i++)
             {
                 var role = asset.roles[i];
@@ -262,25 +345,97 @@ namespace JunaidIRF.SyncedInteractions.Editor
                     }
                 }
 
-                if (roleCurves.Count > 0)
+                var roleObjCurves = new List<(EditorCurveBinding binding, ObjectReferenceKeyframe[] keys)>();
+                foreach (var b in objBindings)
+                {
+                    if (b.path == prefix)
+                    {
+                        var rebased = new EditorCurveBinding { path = "", propertyName = b.propertyName, type = b.type };
+                        roleObjCurves.Add((rebased, AnimationUtility.GetObjectReferenceCurve(edit, b)));
+                    }
+                    else if (b.path.StartsWith(prefix + "/"))
+                    {
+                        string sub = b.path.Substring(prefix.Length + 1);
+                        var rebased = new EditorCurveBinding { path = sub, propertyName = b.propertyName, type = b.type };
+                        roleObjCurves.Add((rebased, AnimationUtility.GetObjectReferenceCurve(edit, b)));
+                    }
+                }
+
+                if (roleCurves.Count > 0 || roleObjCurves.Count > 0)
                 {
                     role.clip.ClearCurves();
                     role.clip.frameRate = edit.frameRate;
                     foreach (var (b, c) in roleCurves) AnimationUtility.SetEditorCurve(role.clip, b, c);
+                    foreach (var (b, k) in roleObjCurves) AnimationUtility.SetObjectReferenceCurve(role.clip, b, k);
                     role.clip.EnsureQuaternionContinuity();
+
+                    var settings = AnimationUtility.GetAnimationClipSettings(role.clip);
+                    settings.loopTime = false;
+                    AnimationUtility.SetAnimationClipSettings(role.clip, settings);
+
                     EditorUtility.SetDirty(role.clip);
                     AssetDatabase.SaveAssetIfDirty(role.clip);
                 }
             }
 
-            // Sync retimed markers back to events
+            // Sync retimed markers back to events, keeping existing event configurations
             var markers = AnimationUtility.GetAnimationEvents(edit).OrderBy(m => m.time).ToArray();
-            for (int j = 0; j < markers.Length && j < asset.events.Count; j++)
-            {
-                asset.events[j].time = markers[j].time;
-            }
+            var markerTimes = markers.Select(m => m.time).ToArray();
+            asset.events = MatchEvents(asset.events ?? new List<InteractionEvent>(), markerTimes, asset);
+            asset.duration = edit.length;
+
             EditorUtility.SetDirty(asset);
             AssetDatabase.SaveAssetIfDirty(asset);
+        }
+
+        static List<InteractionEvent> MatchEvents(List<InteractionEvent> old, float[] times, InteractionAsset asset)
+        {
+            var result = new InteractionEvent[times.Length];
+            var taken = new bool[old.Count];
+            var matched = new bool[times.Length];
+
+            // 1. Exact or near time match keeps the event
+            for (int i = 0; i < times.Length; i++)
+            {
+                for (int j = 0; j < old.Count; j++)
+                {
+                    if (!taken[j] && old[j] != null && Mathf.Abs(old[j].time - times[i]) < 0.0005f)
+                    {
+                        result[i] = old[j];
+                        taken[j] = matched[i] = true;
+                        break;
+                    }
+                }
+            }
+
+            // 2. Dragged markers match remaining in time order
+            var leftover = Enumerable.Range(0, old.Count).Where(j => !taken[j] && old[j] != null).OrderBy(j => old[j].time).ToList();
+            for (int i = 0; i < times.Length; i++)
+            {
+                if (matched[i] || leftover.Count == 0) continue;
+                int j = leftover[0];
+                leftover.RemoveAt(0);
+                old[j].time = times[i];
+                result[i] = old[j];
+                matched[i] = true;
+            }
+
+            // 3. New markers create fresh events
+            for (int i = 0; i < times.Length; i++)
+            {
+                if (!matched[i])
+                {
+                    result[i] = new InteractionEvent
+                    {
+                        id = Guid.NewGuid().ToString("N").Substring(0, 8),
+                        name = $"Event {i + 1}",
+                        time = times[i],
+                        role = asset.roles.Count > 0 ? asset.roles[0].name : ""
+                    };
+                }
+            }
+
+            return result.ToList();
         }
 
         static float FeetBelowPivot(GameObject go)
