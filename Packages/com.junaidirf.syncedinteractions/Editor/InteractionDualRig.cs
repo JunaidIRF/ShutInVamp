@@ -94,8 +94,18 @@ namespace JunaidIRF.SyncedInteractions.Editor
             lastDirty = EditorUtility.GetDirtyCount(editClip);
 
             Selection.activeGameObject = rig;
+            var awInitial = EditorWindow.GetWindow<AnimationWindow>();
+            if (awInitial != null)
+            {
+                awInitial.animationClip = editClip;
+                awInitial.previewing = true;
+                awInitial.time = 0f;
+                awInitial.Repaint();
+            }
+
             EditorApplication.delayCall += () =>
             {
+                Selection.activeGameObject = rig;
                 var aw = EditorWindow.GetWindow<AnimationWindow>();
                 if (aw != null)
                 {
