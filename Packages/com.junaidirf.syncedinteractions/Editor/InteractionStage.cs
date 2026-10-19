@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Timeline;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
@@ -101,6 +102,7 @@ namespace JunaidIRF.SyncedInteractions.Editor
             string path = AssetDatabase.GenerateUniqueAssetPath($"{Folder}/{asset.name} (stage).playable");
             var timeline = ScriptableObject.CreateInstance<TimelineAsset>();
             AssetDatabase.CreateAsset(timeline, path);
+            var tracks = new List<AnimationTrack>();
             for (int i = 0; i < asset.roles.Count; i++)
             {
                 var role = asset.roles[i];
@@ -108,7 +110,7 @@ namespace JunaidIRF.SyncedInteractions.Editor
                 track.trackOffset = TrackOffset.ApplySceneOffsets;
                 var clip = track.CreateClip(role.clip);
                 clip.displayName = role.clip.name;
-                director.SetGenericBinding(track, animators[i]);
+                tracks.Add(track);
             }
             timeline.CreateMarkerTrack();
             foreach (var e in asset.events)
@@ -121,19 +123,58 @@ namespace JunaidIRF.SyncedInteractions.Editor
             }
             EditorUtility.SetDirty(timeline);
             AssetDatabase.SaveAssets();
+
             director.playableAsset = timeline;
+            for (int i = 0; i < tracks.Count; i++)
+            {
+                director.SetGenericBinding(tracks[i], animators[i]);
+            }
             director.time = 0;
             director.Evaluate();
 
             Selection.activeGameObject = stage;
-            EditorApplication.ExecuteMenuItem("Window/Sequencing/Timeline");
+            FocusTimeline(director);
             var sv = SceneView.lastActiveSceneView;
             if (sv != null) { sv.pivot = new Vector3(0f, 1f, 0f); sv.rotation = Quaternion.Euler(15f, 140f, 0f); sv.size = 3f; sv.Repaint(); }
             lastPreviewTime = -1;
         }
 
+        static void FocusTimeline(PlayableDirector director)
+        {
+            try
+            {
+                var win = TimelineEditor.GetOrCreateWindow();
+                if (win != null)
+                {
+                    win.SetTimeline(director);
+                    win.locked = true;
+                    win.Repaint();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("Synced Interactions: could not focus Timeline window: " + ex.Message);
+            }
+        }
+
+        static void UnlockTimeline()
+        {
+            try
+            {
+                var win = TimelineEditor.GetWindow();
+                if (win != null)
+                {
+                    win.locked = false;
+                    win.ClearTimeline();
+                    win.Repaint();
+                }
+            }
+            catch { }
+        }
+
         public static void Close()
         {
+            UnlockTimeline();
             var info = Info;
             if (info != null)
             {
