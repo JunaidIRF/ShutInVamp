@@ -11,13 +11,6 @@ using Object = UnityEngine.Object;
 
 namespace JunaidIRF.SyncedInteractions.Editor
 {
-    /// <summary>A Timeline marker for one of the interaction's events (made and read by the stage).</summary>
-    [Serializable, System.ComponentModel.DisplayName("Interaction Event")]
-    public class InteractionEventMarker : Marker
-    {
-        [HideInInspector] public string eventId;
-    }
-
     /// <summary>
     /// The authoring stage: a scratch scene with each role's preview character standing on its slot, and a
     /// Timeline with one animation track per role (its clip, bound to its character) and a marker per event.
