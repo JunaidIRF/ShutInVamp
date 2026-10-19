@@ -18,6 +18,17 @@ namespace JunaidIRF.SyncedInteractions
     }
 
     /// <summary>
+    /// Implement on any component of a character to veto an interaction before it starts
+    /// (e.g. enemy is not stunned, character is dead, busy with an action...).
+    /// Found on the actor's GameObject and its Animator's GameObject.
+    /// </summary>
+    public interface IInteractionVeto
+    {
+        /// <summary>Whether this character allows taking part in <paramref name="asset"/> with <paramref name="partner"/> as <paramref name="role"/>.</summary>
+        bool CanInteract(InteractionActor partner, InteractionAsset asset, string role, out string reason);
+    }
+
+    /// <summary>
     /// A character that can take part in interactions. Needs an Animator (any controller, Humanoid or Generic).
     /// How it's moved onto its slot is picked from what it has (see <see cref="IInteractionMover"/>).
     /// </summary>
@@ -45,7 +56,16 @@ namespace JunaidIRF.SyncedInteractions
 
         static readonly List<InteractionActor> all = new List<InteractionActor>();
         /// <summary>Every enabled actor.</summary>
-        public static IReadOnlyList<InteractionActor> All => all;
+        public static IReadOnlyList<InteractionActor> All
+        {
+            get
+            {
+                all.RemoveAll(a => a == null);
+                if (!Application.isPlaying && all.Count == 0)
+                    all.AddRange(FindObjectsByType<InteractionActor>(FindObjectsInactive.Exclude));
+                return all;
+            }
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => all.Clear();
@@ -146,6 +166,23 @@ namespace JunaidIRF.SyncedInteractions
             if (a != null && a.gameObject != gameObject)
                 foreach (var p in a.GetComponents<IInteractionParticipant>()) if (!list.Contains(p)) list.Add(p);
             return list;
+        }
+
+        /// <summary>Checks whether any IInteractionVeto component on this actor vetoes taking part.</summary>
+        public bool IsVetoed(InteractionActor partner, InteractionAsset asset, string role, out string reason)
+        {
+            reason = null;
+            var list = new List<IInteractionVeto>();
+            GetComponents(list);
+            var a = Animator;
+            if (a != null && a.gameObject != gameObject)
+                foreach (var v in a.GetComponents<IInteractionVeto>()) if (!list.Contains(v)) list.Add(v);
+            foreach (var v in list)
+            {
+                if (!v.CanInteract(partner, asset, role, out reason))
+                    return true;
+            }
+            return false;
         }
 
         static Transform FindDeep(Transform root, string name)

@@ -98,6 +98,17 @@ namespace JunaidIRF.SyncedInteractions
                 if (actor.Busy) { reason = $"'{actor.name}' is already in '{actor.Current.Asset.name}'"; return false; }
                 if (actor.Animator == null) { reason = $"'{actor.name}' has no Animator"; return false; }
                 if (!used.Add(actor)) { reason = $"'{actor.name}' can't play two roles"; return false; }
+
+                InteractionActor other = null;
+                foreach (var otherRole in asset.roles)
+                {
+                    if (otherRole.name != role.name) { other = cast[otherRole.name]; if (other != null) break; }
+                }
+                if (actor.IsVetoed(other, asset, role.name, out string vetoReason))
+                {
+                    reason = $"'{actor.name}' vetoed: {vetoReason ?? "not allowed"}";
+                    return false;
+                }
             }
             return true;
         }

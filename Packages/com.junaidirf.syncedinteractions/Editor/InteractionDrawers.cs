@@ -80,6 +80,80 @@ namespace JunaidIRF.SyncedInteractions.Editor
         }
     }
 
+    /// <summary>
+    /// Every [SerializeReference] InteractionCondition: a header with its type (click to change or pick)
+    /// and its fields below.
+    /// </summary>
+    [CustomPropertyDrawer(typeof(InteractionCondition), true)]
+    public class InteractionConditionDrawer : PropertyDrawer
+    {
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+        {
+            float h = EditorGUIUtility.singleLineHeight + 2f;
+            if (property.managedReferenceValue == null || !property.isExpanded) return h;
+            var end = property.GetEndProperty();
+            var it = property.Copy();
+            if (it.NextVisible(true))
+                while (!SerializedProperty.EqualContents(it, end))
+                {
+                    h += EditorGUI.GetPropertyHeight(it, true) + EditorGUIUtility.standardVerticalSpacing;
+                    if (!it.NextVisible(false)) break;
+                }
+            return h;
+        }
+
+        public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
+        {
+            var line = new Rect(rect.x, rect.y, rect.width, EditorGUIUtility.singleLineHeight);
+            object value = property.managedReferenceValue;
+            string typeName = value == null ? "(choose a condition)" : ((InteractionCondition)value).MenuName;
+
+            var foldRect = new Rect(line.x, line.y, 14f, line.height);
+            if (value != null) property.isExpanded = EditorGUI.Foldout(foldRect, property.isExpanded, GUIContent.none, true);
+            var buttonRect = new Rect(line.x + 14f, line.y, line.width - 14f, line.height);
+            if (EditorGUI.DropdownButton(buttonRect, new GUIContent(typeName), FocusType.Keyboard, value == null ? EditorStyles.miniPullDown : EditorStyles.boldLabel))
+                TypeMenu(property);
+
+            if (value == null || !property.isExpanded) return;
+            EditorGUI.indentLevel++;
+            float y = line.yMax + 2f;
+            var end = property.GetEndProperty();
+            var it = property.Copy();
+            if (it.NextVisible(true))
+                while (!SerializedProperty.EqualContents(it, end))
+                {
+                    float h = EditorGUI.GetPropertyHeight(it, true);
+                    EditorGUI.PropertyField(new Rect(rect.x, y, rect.width, h), it, true);
+                    y += h + EditorGUIUtility.standardVerticalSpacing;
+                    if (!it.NextVisible(false)) break;
+                }
+            EditorGUI.indentLevel--;
+        }
+
+        static void TypeMenu(SerializedProperty property)
+        {
+            var menu = new GenericMenu();
+            var types = TypeCache.GetTypesDerivedFrom<InteractionCondition>().Where(t => !t.IsAbstract && !t.IsGenericType && t.GetConstructor(Type.EmptyTypes) != null)
+                                 .OrderBy(t => t.Assembly == typeof(InteractionCondition).Assembly ? 0 : 1).ThenBy(t => t.Name);
+            var target = property.serializedObject;
+            string path = property.propertyPath;
+            foreach (var t in types)
+            {
+                var sample = (InteractionCondition)Activator.CreateInstance(t);
+                string group = t.Assembly == typeof(InteractionCondition).Assembly ? "Built-in/" : "";
+                menu.AddItem(new GUIContent(group + sample.MenuName), property.managedReferenceValue != null && property.managedReferenceValue.GetType() == t, () =>
+                {
+                    target.Update();
+                    var p = target.FindProperty(path);
+                    p.managedReferenceValue = Activator.CreateInstance(t);
+                    p.isExpanded = true;
+                    target.ApplyModifiedProperties();
+                });
+            }
+            menu.ShowAsContext();
+        }
+    }
+
     /// <summary>A bone name: a text field, plus a menu of the humanoid bones and the preview character's own bones.</summary>
     [CustomPropertyDrawer(typeof(InteractionBoneAttribute))]
     public class InteractionBoneDrawer : PropertyDrawer
