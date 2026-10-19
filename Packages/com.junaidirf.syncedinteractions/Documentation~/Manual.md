@@ -1,140 +1,185 @@
-# Synced Interactions User Manual & Integration Guide
+# Synced Interactions — User Manual & Architecture Guide
 
-A complete, practical guide for authoring, customizing, and triggering synchronized multi-character animations in Unity.
+A modular, zero-controller-edit system for synchronized multi-character animations, executions, paired combat, and co-op interactions in Unity.
 
 ---
 
 ## Table of Contents
-1. [Core Principles](#1-core-principles)
-2. [Character Setup](#2-character-setup)
+1. [System Architecture](#1-system-architecture)
+2. [Quick Setup in 2 Minutes](#2-quick-setup-in-2-minutes)
 3. [Creating an Interaction Asset](#3-creating-an-interaction-asset)
-4. [Authoring Workflow 1: Dual Rig (Animation Window)](#4-authoring-workflow-1-dual-rig-animation-window)
-5. [Authoring Workflow 2: Timeline Stage](#5-authoring-workflow-2-timeline-stage)
+4. [Authoring Mode 1: Animate Both (Animation Window)](#4-authoring-mode-1-animate-both-animation-window)
+5. [Authoring Mode 2: Open on Stage (Timeline)](#5-authoring-mode-2-open-on-stage-timeline)
 6. [Bone Targeting & Scene Selection](#6-bone-targeting--scene-selection)
 7. [Custom Game Actions (Dismemberment, VFX, Audio)](#7-custom-game-actions)
-8. [Runtime Triggering & Gameplay Integration](#8-runtime-triggering--gameplay-integration)
+8. [Runtime Scripting & Gameplay API](#8-runtime-scripting--gameplay-api)
 9. [Vetoes & Participant Callbacks](#9-vetoes--participant-callbacks)
+10. [Authoring Modes Comparison](#10-authoring-modes-comparison)
 
 ---
 
-## 1. Core Principles
+## 1. System Architecture
 
-- **No Controller Pollution**: Plays clips directly on `Animator` components using Unity's `Playables` API (`AnimationPlayableOutput`). Your existing Animator Controllers, transitions, and layers are never touched or modified.
-- **Master Clock Sync**: Advances all participant playables from a single shared delta clock each frame, guaranteeing zero drift regardless of framerate.
-- **Strict Modularity**: The package contains zero game-specific logic. Gameplay mechanics (dismemberment, blood decals, screen shakes, health subtraction) are authored as self-contained `InteractionAction` classes in your game code.
+```mermaid
+flowchart TD
+    subgraph Asset["Interaction Asset (ScriptableObject)"]
+        R["Roles (Clips, Slot Offsets, Yaw)"]
+        E["Events (Times, Target Bones, Actions)"]
+        A["Alignment (Glide / Warp / Snap Ground)"]
+    end
+
+    subgraph Authoring["Authoring Workflows"]
+        direction TB
+        DR["<b>Animate Both (Dual Rig)</b><br/>Combines all characters into one Animator<br/>Keyframe both characters on 1 Dopesheet<br/>Auto splits & writes back to individual clips"]
+        TL["<b>Open on Stage (Timeline)</b><br/>Scratch Timeline with 1 Track per role<br/>Scrub in sync & retime event markers<br/>Move characters in Scene to adjust slots"]
+    end
+
+    subgraph Runtime["Runtime Execution (Zero Controller Pollution)"]
+        direction TB
+        IP["Interaction.Play(asset, actors...)"]
+        IR["InteractionRunner (Master Clock)"]
+        PO["AnimationPlayableOutput (per Actor)"]
+        EV["InteractionAction.Fire(context)"]
+    end
+
+    Asset --> Authoring
+    Asset --> Runtime
+    IP --> IR --> PO
+    IR --> EV
+```
 
 ---
 
-## 2. Character Setup
+## 2. Quick Setup in 2 Minutes
 
-Every character participating in an interaction needs an `InteractionActor` component:
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Prefab as Character Prefab
+    participant Asset as Interaction Asset
+    participant Editor as Unity Editor
 
+    Dev->>Prefab: Add InteractionActor component
+    Dev->>Asset: Create > Synced Interactions > Interaction
+    Dev->>Asset: Assign Roles, Clips, and Preview Prefabs
+    Dev->>Editor: Click "Animate Both" or "Open on Stage"
+    Editor-->>Dev: Ready to animate / preview in real time!
 ```
-Character GameObject
-├── InteractionActor (Component)
-│   └── Animator: [Assigned Animator] (Leave empty to auto-find in children)
-└── Animator (Humanoid or Generic)
-```
 
-1. Select your character prefab (e.g., `Player.prefab`, `Enemy.prefab`).
-2. Add component: **`Synced Interactions > Interaction Actor`**.
-3. **Animator Assignment**:
-   - If the `Animator` is on the root GameObject, leave the **Animator** field empty (it auto-detects it).
-   - If the `Animator` is on a child GameObject (e.g. `Model` or `Camera Head`), drag that child into the **Animator** field.
-4. **Movement Adapter** (`IInteractionMover`):
-   - Automatically detects whatever character controller is present: `CharacterController`, `NavMeshAgent`, `Rigidbody`, or raw `Transform`. No extra configuration needed.
+### Step 1: Add `InteractionActor` to your Prefabs
+Attach `InteractionActor` to every character that can initiate or receive interactions.
+
+| Prefab Hierarchy | How to configure `InteractionActor` |
+| :--- | :--- |
+| **Animator on Root** *(standard humanoid)* | Leave the **Animator** property empty (it auto-detects it). |
+| **Animator on Child** *(FPS hands, weapon rigs, models)* | Drag the child object with the `Animator` into the **Animator** field. |
+
+> [!NOTE]
+> Movement adapters (`IInteractionMover`) are discovered automatically. Whether your character uses a `CharacterController`, `NavMeshAgent`, `Rigidbody`, or raw `Transform`, the actor adapts with zero manual wiring.
+
+---
+
+### Step 2: Create the `InteractionAsset`
+Right-click in the Project Window:
+**Create &rarr; Synced Interactions &rarr; Interaction**
+
+Configure the core settings:
+- **Roles**: Add entries for each character (e.g. `Attacker` and `Victim`).
+- **Clip**: The `AnimationClip` for this character.
+- **Preview Prefab**: The prefab to display when editing.
+- **Offset & Yaw**: Position $(X, Y, Z)$ and rotation relative to the anchor role.
+- **Anchor**: Choose `Role` (anchor to one character's position) or `World` (anchor to a fixed world spot).
+- **Alignment**:
+  - `Glide`: Characters smoothly slide into their slots over `alignTime` before the animation starts.
+  - `Warp`: Characters instantly snap to slots.
+  - `None`: Characters play in place.
 
 ---
 
 ## 3. Creating an Interaction Asset
 
-Right-click in Project view > **Create > Synced Interactions > Interaction**.
+### Key Inspector Fields:
 
-### Key Fields:
-- **Roles**:
-  - `name`: Identifier for the role (e.g., `Attacker`, `Victim`, `Leader`, `Follower`).
-  - `clip`: The `AnimationClip` for this character.
-  - `previewPrefab`: The prefab instantiated when authoring on stage or dual rig.
-  - `offset`: Relative position $(X, Y, Z)$ from the anchor role.
-  - `yaw`: Facing rotation in degrees relative to the anchor.
-  - `blendIn` / `blendOut`: Crossfade duration in seconds.
-  - `lookAtRole` / `lookAtBone`: (Optional) Automatically pitch/aim towards another role or specific bone.
-- **Anchor**:
-  - `Role`: Anchor to a role (e.g. `Victim` stays in place, `Player` moves to slot).
-  - `World`: Anchor to interaction trigger position.
-- **Alignment**:
-  - `Glide`: Smoothly lerps characters into slot positions over `alignTime` before starting.
-  - `Warp`: Instantly teleports characters to slots.
-  - `None`: Plays animations in current world poses.
-- **Snap To Ground**: Raycasts down onto `groundMask` to position characters on uneven terrain.
+| Setting | Type | Description |
+| :--- | :--- | :--- |
+| **Roles** | `List<InteractionRole>` | The participants in the interaction. Supports 2 characters or $N$ characters. |
+| **Anchor** | `Role` or `World` | Which coordinate space the interaction aligns to. |
+| **Anchor Role** | `string` | The role that stays fixed while others align to it. |
+| **Alignment** | `Glide`, `Warp`, `None` | Method used to position actors at slot coordinates before playback. |
+| **Align Time** | `float` | Duration in seconds for characters to glide into place. |
+| **Snap To Ground** | `bool` | Raycasts down against `groundMask` to keep feet planted on slopes and terrain. |
+| **Events** | `List<InteractionEvent>` | Timed moments during the animation that fire gameplay actions. |
 
 ---
 
-## 4. Authoring Workflow 1: Dual Rig (Animation Window)
+## 4. Authoring Mode 1: Animate Both (Animation Window)
 
-Use this when you want to **animate or tweak keyframes of both characters simultaneously** on a single unified dopesheet (similar to custom multi-character authoring rigs).
+To edit keyframes of both characters on the **same dopesheet** at the same time:
 
-### How to use:
-1. Select the `InteractionAsset` in the Project view.
-2. Click **"Animate Both (Animation Window)"** in the Inspector.
-3. Unity opens a temporary authoring scene:
-   - Creates root `[Interaction Rig: <Asset>]` with an Animator and editing controller.
-   - Parents both characters under the rig as `Role0` and `Role1` at their authoring slots.
-   - Automatically strips nested child animators so only the root rig drives the hierarchy.
-   - Combines all curves into one editing clip: `<Role0>/<BonePath>` and `<Role1>/<BonePath>`.
+1. Select your `InteractionAsset` in the Inspector.
+2. Click **"Animate Both (Animation Window)"**.
+3. Unity opens a clean staging scene:
+   - Builds root `[Interaction Rig: <Asset>]` with an Animator driving a merged clip.
+   - Mounts each character's animated root directly under the rig as `Attacker` and `Victim`.
    - Opens Unity's **Animation Window** with all keyframes visible together.
-4. **Scrub & Edit**:
-   - Both characters are visible on the dopesheet and curve graph.
-   - Move bones, rotate joints, adjust timing, or record keyframes using Unity's standard Animation tools.
-   - Drag event markers on the animation timeline to retime events.
-5. **Save & Exit**:
-   - Edits automatically write back to each individual `role.clip` as you work.
-   - Click **"Apply Now"** in the Inspector to force an immediate save.
-   - Click **"Apply & Close Dual Rig"** to commit all changes, restore your previous scene, and delete the temporary staging folder.
+
+```
+[Interaction Rig] (Parent Animator)
+├── Attacker (e.g. Hands / Skeleton)  ──> Keyframed as "Attacker/..."
+└── Victim   (e.g. Model / Skeleton)  ──> Keyframed as "Victim/..."
+```
+
+### Advantages:
+- **Zero Missing Bones**: Curves map 1:1 to each character's bones.
+- **Shared Timeline**: Scrub through the attack and reaction together; see punch impact vs. head recoil on the exact same frame.
+- **Automatic Write-Back**: Curves are automatically split by prefix (`Attacker/...` &rarr; Attacker clip, `Victim/...` &rarr; Victim clip) and saved to disk.
+- **Save & Exit**: Click **"Apply & Close Dual Rig"** in the Inspector to return to your scene.
 
 ---
 
-## 5. Authoring Workflow 2: Timeline Stage
+## 5. Authoring Mode 2: Open on Stage (Timeline)
 
-Use this when you want to **preview the interaction in sync, adjust slot placement interactively, and retime events**.
+To preview the interaction with synchronized playback, retime events, and adjust slots interactively:
 
-### How to use:
-1. Select the `InteractionAsset`.
+1. Select your `InteractionAsset`.
 2. Click **"Open on Stage (Timeline)"**.
-3. Unity creates a scratch scene with a Timeline:
-   - One Animation Track per role, bound to each preview character.
-   - A Marker Track showing all `InteractionEvent`s as draggable markers.
-4. **Interact**:
-   - Scrub the Timeline playback head to inspect the animation in real time.
-   - Drag a character in the Scene view with Unity's Move tool: its slot offset updates in the asset automatically.
-   - Drag an event marker on the marker track: the event's `time` updates automatically.
-   - Right-click the marker track to add a new event; delete a marker to remove an event.
-5. Click **"Close Timeline Stage"** to return to your scene.
+3. **Timeline Scrubber**: Drag the Timeline playhead to preview the synchronized animation with proper skinning and attachments.
+4. **Interactive Slot Positioning**: Select either character in the Scene View and move/rotate them using Unity's transform gizmos. Their `offset` and `yaw` automatically update in the asset.
+5. **Draggable Event Markers**: Drag markers on the Timeline marker track to change event timestamps. Right-click to add new events.
+6. Click **"Close Timeline Stage"** to return to your scene.
 
 ---
 
 ## 6. Bone Targeting & Scene Selection
 
-When adding events that attach effects, sounds, or damage to specific bones (e.g. bite neck, slash chest, grab hand):
+Events let you trigger gameplay actions at specific frames (e.g. neck bite at $t = 0.22\text{s}$, weapon impact at $t = 0.5\text{s}$).
 
-1. Under **Events**, find your event.
-2. In the **Role** field, choose which character owns the target bone.
-3. In the **Bone** dropdown:
-   - **`Use Selected: "<TransformName>"`**: Click any GameObject or bone in the Scene view / Hierarchy, then click this option to instantly assign it.
-   - **Drag-and-Drop**: Drag any bone or GameObject directly from the Hierarchy or Project into the Bone field.
-   - **Preview bones >**: Browse the full bone hierarchy tree of the role's preview prefab.
-   - **Humanoid >**: Pick standard humanoid body parts (`Head`, `LeftHand`, `Chest`, etc.).
-   - **(root)**: Targets the character's base Transform.
+Each event targets a character **Role** and a **Bone**. The Inspector provides multiple ways to select bones:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Bone: [ mixamorig:LeftShoulder                       ] │
+│       ├── Use Selected: "mixamorig:LeftShoulder"       │  <-- Click scene object, then click this!
+│       ├── Drag-and-drop Transform from Hierarchy       │
+│       ├── Preview bones > [Browse full skeleton tree]  │
+│       ├── Humanoid > [Head, Chest, LeftHand, etc.]     │
+│       └── (root)                                       │
+└────────────────────────────────────────────────────────┘
+```
+
+> [!TIP]
+> **Fastest Bone Selection**: Click any bone or mesh in the Scene View or Hierarchy, then click the top dropdown option: **`Use Selected: "<TransformName>"`**.
 
 ---
 
 ## 7. Custom Game Actions
 
-Actions are modular `[SerializeReference]` classes that execute when an event fires. Anyone can write custom actions for their game without editing package code.
+Actions are modular, self-contained `[SerializeReference]` classes. Any project can add custom actions without touching the core package.
 
-### Step 1: Create a Custom Action Class
+### Example: Dismemberment & Severed Limb Action
 
-Create a new C# script anywhere in your project's `Assets` folder (e.g. `Assets/Scripts/Interactions/DismemberAction.cs`):
+Create `Assets/Scripts/Interactions/DismemberAction.cs`:
 
 ```csharp
 using System;
@@ -144,144 +189,141 @@ using JunaidIRF.SyncedInteractions;
 [Serializable]
 public class DismemberAction : InteractionAction, IInteractionPreviewAction
 {
-    [Tooltip("Which body part or limb to sever")]
-    public string bodyPart = "LeftArm";
+    [Tooltip("Limb name or tag to sever")]
+    public string limbName = "LeftArm";
 
-    [Tooltip("Prefab spawned when limb is detached")]
-    public GameObject severedLimbPrefab;
+    [Tooltip("Prefab to spawn at the cut location")]
+    public GameObject severedPropPrefab;
 
-    /// <summary>Called when the event fires at runtime during gameplay.</summary>
+    [Tooltip("Blood splatter FX prefab")]
+    public GameObject bloodFxPrefab;
+
+    /// <summary>Fired at runtime when the interaction timeline reaches this event.</summary>
     public override void Fire(InteractionContext context)
     {
-        // context.actor: The character whose role is assigned to this event
-        // context.bone:  The resolved target bone transform
+        // context.actor: The character who owns the target bone
+        // context.bone:  The exact resolved bone transform
         // context.handle: The running interaction handle
-        // context["OtherRole"]: Access another participant actor by role name
+        // context["OtherRole"]: Access another participant by role name
 
         if (context.bone == null) return;
 
-        Debug.Log($"Severing {bodyPart} on {context.actor.name} at bone {context.bone.name}");
-
-        // Example: Disable bone renderer / hide mesh
-        var renderer = context.bone.GetComponentInChildren<Renderer>();
-        if (renderer != null) renderer.enabled = false;
-
-        // Example: Spawn severed limb prop
-        if (severedLimbPrefab != null)
+        // 1. Spawn blood effect at the bone position
+        if (bloodFxPrefab != null)
         {
-            GameObject.Instantiate(severedLimbPrefab, context.bone.position, context.bone.rotation);
+            GameObject.Instantiate(bloodFxPrefab, context.bone.position, context.bone.rotation);
+        }
+
+        // 2. Hide the attached limb mesh
+        var smr = context.bone.GetComponentInChildren<Renderer>();
+        if (smr != null) smr.enabled = false;
+
+        // 3. Spawn severed limb prop with physics
+        if (severedPropPrefab != null)
+        {
+            var prop = GameObject.Instantiate(severedPropPrefab, context.bone.position, context.bone.rotation);
+            var rb = prop.GetComponent<Rigidbody>();
+            if (rb != null) rb.AddForce(Vector3.up * 2f + Vector3.back * 3f, ForceMode.Impulse);
         }
     }
 
-    /// <summary>Optional: Called when interaction ends (clean up temporary state).</summary>
-    public override void End(InteractionContext context, bool cancelled)
-    {
-        // Clean up or finalize state if necessary
-    }
+    // ─────────────────────────────────────────────────────────────────
+    // IInteractionPreviewAction: Live Preview on Stage Timeline
+    // ─────────────────────────────────────────────────────────────────
 
-    // ─────────────────────────────────────────────────────────────
-    // Stage Preview Support (IInteractionPreviewAction)
-    // ─────────────────────────────────────────────────────────────
-
-    /// <summary>Called while scrubbing on stage when the playhead reaches or leaves this event.</summary>
+    /// <summary>Called while scrubbing on stage when the playhead passes this event.</summary>
     public void Preview(GameObject character, Transform bone, bool reached)
     {
         if (bone == null) return;
-        var renderer = bone.GetComponentInChildren<Renderer>();
-        if (renderer != null)
-        {
-            renderer.enabled = !reached; // Hide limb when scrubbed past the event
-        }
+        var r = bone.GetComponentInChildren<Renderer>();
+        if (r != null) r.enabled = !reached; // Hide limb when past event time
     }
 
-    /// <summary>Called when authoring stage closes to restore original prefab state.</summary>
+    /// <summary>Called when the stage closes to restore character state.</summary>
     public void EndPreview(GameObject character)
     {
         foreach (var r in character.GetComponentsInChildren<Renderer>(true))
-        {
             r.enabled = true;
-        }
     }
 }
 ```
 
-### Step 2: Use It in the Inspector
-Because `DismemberAction` inherits from `InteractionAction`, Unity automatically includes it in the **"Add Action"** dropdown on any event in your `InteractionAsset`!
+> [!IMPORTANT]
+> Because `DismemberAction` inherits from `InteractionAction`, it **automatically appears** in the inspector's **"Add action"** menu on every event!
 
 ---
 
-## 8. Runtime Triggering & Gameplay Integration
+## 8. Runtime Scripting & Gameplay API
 
-### Trigger by Code:
+### Triggering an Interaction via Code
 ```csharp
 using UnityEngine;
 using JunaidIRF.SyncedInteractions;
 
-public class ExecutionController : MonoBehaviour
+public class CombatController : MonoBehaviour
 {
-    [SerializeField] InteractionAsset biteInteraction;
+    [SerializeField] InteractionAsset takedownAsset;
     [SerializeField] InteractionActor playerActor;
 
-    public void ExecuteEnemy(InteractionActor enemyActor)
+    public void PerformTakedown(InteractionActor targetEnemy)
     {
-        // Plays interaction with player as Role 0 and enemy as Role 1 (or role name mapping)
-        InteractionHandle handle = Interaction.Play(biteInteraction, playerActor, enemyActor);
+        // Play directly
+        InteractionHandle handle = Interaction.Play(takedownAsset, playerActor, targetEnemy);
 
-        // Optional callbacks
-        handle.OnFinished += (h) => Debug.Log("Execution completed successfully!");
-        handle.OnCancelled += (h) => Debug.Log("Execution was interrupted!");
+        // Optional completion callbacks
+        handle.OnFinished += h => Debug.Log("Takedown complete!");
+        handle.OnCancelled += h => Debug.Log("Takedown was interrupted!");
     }
 }
 ```
-
-### Trigger by Proximity & Prompt (`InteractionTrigger`):
-1. Attach `InteractionTrigger` to an interactable object or NPC.
-2. Assign the `asset`.
-3. Set `activationMode = PromptAndKey`, and assign a key (e.g. `KeyCode.E`).
-4. When a player with an `InteractionActor` enters the trigger radius, the trigger detects the player and fires `onPromptStateChanged(true)`. Pressing `E` starts the interaction.
 
 ---
 
 ## 9. Vetoes & Participant Callbacks
 
-### Dynamic Vetoing (`IInteractionVeto`):
-Implement `IInteractionVeto` on any component on the character (or its Animator) to prevent interactions under specific conditions (e.g. enemy is not stunned, character is already dead, invulnerable):
+### Preventing Interactions with Vetoes (`IInteractionVeto`)
+Implement `IInteractionVeto` on any component on the character to reject interactions dynamically:
 
 ```csharp
 using UnityEngine;
 using JunaidIRF.SyncedInteractions;
 
-public class EnemyHealth : MonoBehaviour, IInteractionVeto
+public class EnemyCombatState : MonoBehaviour, IInteractionVeto
 {
     public bool isStunned;
-    public bool isDead;
+    public bool isInvulnerable;
 
     public bool CanInteract(InteractionActor partner, InteractionAsset asset, string role, out string reason)
     {
-        if (isDead)
+        if (isInvulnerable)
         {
-            reason = "Enemy is dead";
+            reason = "Target is invulnerable";
             return false;
         }
-        if (!isStunned && role == "Victim")
+
+        // Only allow executions if the enemy is stunned
+        if (role == "Victim" && !isStunned)
         {
-            reason = "Enemy is not stunned";
+            reason = "Target is not stunned";
             return false;
         }
+
         reason = null;
         return true;
     }
 }
 ```
 
-### Participant Lifecycle (`IInteractionParticipant`):
-Implement `IInteractionParticipant` on your movement or AI scripts to cleanly freeze AI/input during interactions:
+---
+
+### Pausing AI & Input during Interactions (`IInteractionParticipant`)
+Implement `IInteractionParticipant` on movement or AI controllers to freeze behavior cleanly during an interaction:
 
 ```csharp
 using UnityEngine;
 using JunaidIRF.SyncedInteractions;
 
-public class EnemyAI : MonoBehaviour, IInteractionParticipant
+public class EnemyBrain : MonoBehaviour, IInteractionParticipant
 {
     public void OnInteractionStart(InteractionHandle handle, string role)
     {
@@ -291,8 +333,22 @@ public class EnemyAI : MonoBehaviour, IInteractionParticipant
 
     public void OnInteractionEnd(InteractionHandle handle, string role, bool cancelled)
     {
-        // Re-enable AI when interaction finishes or is cancelled
+        // Resume AI logic once the interaction completes or cancels
         enabled = true;
     }
 }
 ```
+
+---
+
+## 10. Authoring Modes Comparison
+
+| Feature | Animate Both (Dual Rig) | Open on Stage (Timeline) |
+| :--- | :--- | :--- |
+| **Window Used** | Unity Animation Window | Unity Timeline Window |
+| **Primary Purpose** | Keyframing, tweaking curves, posing | Scrubbing, slot layout, retiming events |
+| **Dopesheet View** | Both characters on **one** dopesheet | Separate tracks per character |
+| **Keyframe Editing** | Full curve and dopesheet tools | Right-click clip &rarr; edit in Animation |
+| **Slot Positioning** | Fixed at slot offsets | Interactive move gizmo in Scene View |
+| **Event Markers** | Animation event markers on dopesheet | Draggable markers on Timeline track |
+| **Write-Back** | Automatic curve splitting & saving | Real-time asset synchronization |
