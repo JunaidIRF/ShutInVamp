@@ -26,6 +26,8 @@ public class PlayerExecution : MonoBehaviour
 
     [Header("Executions")]
     public ExecutionData[] executions;      // a random one that both animators support is played
+    public JunaidIRF.SyncedInteractions.InteractionAsset[] interactionExecutions;
+    public JunaidIRF.SyncedInteractions.InteractionActor playerActor;
     public KeyCode key = KeyCode.E;
     public float range = 1.6f;              // flat distance to the enemy
     public float maxAngle = 55f;            // enemy must be this close to where we look
@@ -95,11 +97,53 @@ public class PlayerExecution : MonoBehaviour
         Shooter victim = candidate != null ? candidate : FindTarget();
         if (victim == null || victim.anim == null) return false;
 
+        // 1. Synced Interactions
+        if (interactionExecutions != null && interactionExecutions.Length > 0)
+        {
+            if (playerActor == null) playerActor = GetComponentInChildren<JunaidIRF.SyncedInteractions.InteractionActor>();
+            var victimActor = victim.GetComponent<JunaidIRF.SyncedInteractions.InteractionActor>();
+            if (playerActor != null && victimActor != null)
+            {
+                var chosen = PickInteractionAsset(victimActor);
+                if (chosen != null)
+                {
+                    IsExecuting = true;
+                    SetPrompt(false);
+                    executionSound?.Play();
+                    var handle = JunaidIRF.SyncedInteractions.Interaction.Play(chosen, victimActor, playerActor);
+                    if (handle != null)
+                    {
+                        handle.Ended += (h, cancelled) =>
+                        {
+                            IsExecuting = false;
+                            RestoreHands();
+                        };
+                        return true;
+                    }
+                    IsExecuting = false;
+                }
+            }
+        }
+
+        // 2. Legacy execution fallback
         ExecutionData data = PickExecution(victim.anim);
         if (data == null) return false;
 
         running = StartCoroutine(Run(victim, data));
         return true;
+    }
+
+    public JunaidIRF.SyncedInteractions.InteractionAsset PickInteractionAsset(JunaidIRF.SyncedInteractions.InteractionActor victimActor = null)
+    {
+        if (interactionExecutions == null || interactionExecutions.Length == 0) return null;
+        if (playerActor == null) playerActor = GetComponentInChildren<JunaidIRF.SyncedInteractions.InteractionActor>();
+        int start = Random.Range(0, interactionExecutions.Length);
+        for (int i = 0; i < interactionExecutions.Length; i++)
+        {
+            var a = interactionExecutions[(start + i) % interactionExecutions.Length];
+            if (a != null && (victimActor == null || JunaidIRF.SyncedInteractions.Interaction.CanPlay(a, victimActor, playerActor))) return a;
+        }
+        return null;
     }
 
     ExecutionData PickExecution(Animator victimAnim)
@@ -118,8 +162,27 @@ public class PlayerExecution : MonoBehaviour
     Shooter FindTarget()
     {
         if (cam == null) return null;
+
+        if (interactionExecutions != null && interactionExecutions.Length > 0)
+        {
+            if (playerActor == null) playerActor = GetComponentInChildren<JunaidIRF.SyncedInteractions.InteractionActor>();
+            if (playerActor != null)
+            {
+                var query = new JunaidIRF.SyncedInteractions.InteractionQuery
+                {
+                    maxDistance = range,
+                    maxAngle = maxAngle,
+                    flatDistance = true,
+                    requireLineOfSight = false,
+                    targetRole = "Victim"
+                };
+                var best = query.FindBest(playerActor, PickInteractionAsset());
+                if (best != null) return best.GetComponent<Shooter>();
+            }
+        }
+
         Vector3 look = Vector3.ProjectOnPlane(cam.forward, Vector3.up);
-        Shooter best = null;
+        Shooter bestLegacy = null;
         float bestDist = range;
 
         foreach (Shooter s in FindObjectsByType<Shooter>(FindObjectsInactive.Exclude))
@@ -129,10 +192,10 @@ public class PlayerExecution : MonoBehaviour
             to.y = 0f;
             float dist = to.magnitude;
             if (dist > bestDist || Vector3.Angle(look, to) > maxAngle) continue;
-            best = s;
+            bestLegacy = s;
             bestDist = dist;
         }
-        return best;
+        return bestLegacy;
     }
 
     IEnumerator Run(Shooter victim, ExecutionData data)
@@ -256,7 +319,7 @@ public class PlayerExecution : MonoBehaviour
     }
 
     /// <summary>Hands (and their fire) onto the normal scene layer, so the victim's body can cover them.</summary>
-    void SetHandsWorld()
+    public void SetHandsWorld()
     {
         if (handLayers.Count == 0)
         {
@@ -273,7 +336,7 @@ public class PlayerExecution : MonoBehaviour
     }
 
     /// <summary>Hands back on the layers they had (the overlay). Safe to call any time.</summary>
-    void RestoreHands()
+    public void RestoreHands()
     {
         foreach (var (go, layer) in handLayers)
             if (go != null) go.layer = layer;

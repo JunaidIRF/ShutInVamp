@@ -5856,6 +5856,7 @@ GameObject:
   - component: {fileID: 6898964342224586711}
   - component: {fileID: 1246532437220398619}
   - component: {fileID: 7493590115533598473}
+  - component: {fileID: 6988964198248350860}
   m_Layer: 9
   m_Name: Shooter
   m_TagString: Untagged
@@ -6025,6 +6026,27 @@ NavMeshAgent:
   m_BaseOffset: 1
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 2
+--- !u!114 &6988964198248350860
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9148090444954282397}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f6b0928bb78c4e4296dba9bf7e6d10d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: JunaidIRF.SyncedInteractions::JunaidIRF.SyncedInteractions.InteractionActor
+  animator: {fileID: 8331713501294495451}
+  available: 1
+  onInteractionStart:
+    m_PersistentCalls:
+      m_Calls: []
+  onInteractionEnd:
+    m_PersistentCalls:
+      m_Calls: []
+  namedEvents: []
 --- !u!1 &9177346243323508664
 GameObject:
   m_ObjectHideFlags: 0

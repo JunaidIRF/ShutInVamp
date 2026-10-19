@@ -15246,6 +15246,7 @@ GameObject:
   - component: {fileID: 966134056652523022}
   - component: {fileID: 3175878800404500412}
   - component: {fileID: 9016484500359101622}
+  - component: {fileID: 9214115204525559940}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -15794,6 +15795,12 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a07cf4e9e01b5c349afd93a277567b8d, type: 2}
   - {fileID: 11400000, guid: ff690dba9e8512e488bc5d24b25aaf32, type: 2}
   - {fileID: 11400000, guid: 425e262c5ba86f6469cfbfdda6d0fed6, type: 2}
+  interactionExecutions:
+  - {fileID: 11400000, guid: cc1a5e0a6e5e7bc4785ba125bdde0a23, type: 2}
+  - {fileID: 11400000, guid: 18575b2afdec18642bba0e0b943186ef, type: 2}
+  - {fileID: 11400000, guid: 940adea96edb0ac45a20e38ef340d09b, type: 2}
+  - {fileID: 11400000, guid: 9b4caa72290078b4caf89ff0068f69ca, type: 2}
+  playerActor: {fileID: 9214115204525559940}
   key: 101
   range: 1.6
   maxAngle: 55
@@ -15862,6 +15869,27 @@ MonoBehaviour:
   moveShiftMax: 0.035
   moveRoll: 0.35
   smooth: 9
+--- !u!114 &9214115204525559940
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5446419775191248859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f6b0928bb78c4e4296dba9bf7e6d10d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: JunaidIRF.SyncedInteractions::JunaidIRF.SyncedInteractions.InteractionActor
+  animator: {fileID: 2954540343418349149}
+  available: 1
+  onInteractionStart:
+    m_PersistentCalls:
+      m_Calls: []
+  onInteractionEnd:
+    m_PersistentCalls:
+      m_Calls: []
+  namedEvents: []
 --- !u!1 &5481123272860611650
 GameObject:
   m_ObjectHideFlags: 0

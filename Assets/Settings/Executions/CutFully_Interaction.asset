@@ -1,0 +1,220 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69050b50a55f6e04596663487ecc6387, type: 3}
+  m_Name: CutFully_Interaction
+  m_EditorClassIdentifier: JunaidIRF.SyncedInteractions::JunaidIRF.SyncedInteractions.InteractionAsset
+  roles:
+  - name: Victim
+    clip: {fileID: 7400000, guid: b47b3ad60947a5746821b4b13cb7e7a4, type: 2}
+    offset: {x: 0, y: 0, z: 0}
+    yaw: 0
+    moveToSlot: 0
+    lookAtRole: 
+    lookAtBone: 
+    blendIn: 0.1
+    blendOut: 0.2
+    applyRootMotion: 0
+    releaseTime: 1.3333334
+    previewPrefab: {fileID: 9148090444954282397, guid: ddb115fdb0d45474a974df1d9c7f6f5c, type: 3}
+  - name: Player
+    clip: {fileID: 7400000, guid: 7bde8a0ec6f382b42a4f0ad4c7a2ca6f, type: 2}
+    offset: {x: -0.2, y: 0, z: 0.6}
+    yaw: 180
+    moveToSlot: 1
+    lookAtRole: Victim
+    lookAtBone: mixamorig:LeftShoulder
+    blendIn: 0.1
+    blendOut: 0.2
+    applyRootMotion: 0
+    releaseTime: 0
+    previewPrefab: {fileID: 5446419775191248859, guid: 6ae6c64272b679a46a03473715e9c9af, type: 3}
+  anchor: 0
+  anchorRole: Victim
+  align: 1
+  alignTime: 0.2
+  snapToGround: 1
+  groundMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  duration: 1.4833333
+  cancellable: 1
+  events:
+  - name: Hands World
+    id: 
+    time: 0
+    role: Player
+    bone: 
+    actions:
+    - rid: 4535845438023270508
+  - name: Event 1
+    id: 
+    time: 0.3
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270509
+    - rid: 4535845438023270510
+  - name: Event 2
+    id: 
+    time: 0.31666666
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270511
+    - rid: 4535845438023270512
+    - rid: 4535845438023270513
+  - name: Event 3
+    id: 
+    time: 0.33333334
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270514
+    - rid: 4535845438023270515
+  - name: Event 4
+    id: 
+    time: 0.8333333
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270516
+    - rid: 4535845438023270517
+  - name: Event 5
+    id: 
+    time: 1.1166667
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270518
+    - rid: 4535845438023270519
+    - rid: 4535845438023270520
+    - rid: 4535845438023270521
+  - name: Event 6
+    id: 
+    time: 1.2666667
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270522
+  - name: Event 7
+    id: 
+    time: 1.2833333
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270523
+  - name: Kill
+    id: 
+    time: 1.3333334
+    role: Victim
+    bone: mixamorig:LeftShoulder
+    actions:
+    - rid: 4535845438023270524
+  references:
+    version: 2
+    RefIds:
+    - rid: 4535845438023270508
+      type: {class: ExecutionHandsLayerAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        layer: 1
+        worldLayer: 0
+    - rid: 4535845438023270509
+      type: {class: ExecutionBloodAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        sound:
+          clip: {fileID: 0}
+          alternatives: []
+          volume: 1
+          pitch: {x: 0.95, y: 1.05}
+          spatial: 0
+    - rid: 4535845438023270510
+      type: {class: ExecutionSeverAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        part: 2
+    - rid: 4535845438023270511
+      type: {class: ExecutionBloodAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        sound:
+          clip: {fileID: 0}
+          alternatives: []
+          volume: 1
+          pitch: {x: 0.95, y: 1.05}
+          spatial: 0
+    - rid: 4535845438023270512
+      type: {class: ExecutionSeverAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        part: 1
+    - rid: 4535845438023270513
+      type: {class: ExecutionHandsLayerAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        layer: 2
+        worldLayer: 0
+    - rid: 4535845438023270514
+      type: {class: ExecutionBloodAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        sound:
+          clip: {fileID: 0}
+          alternatives: []
+          volume: 1
+          pitch: {x: 0.95, y: 1.05}
+          spatial: 0
+    - rid: 4535845438023270515
+      type: {class: ExecutionSeverAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        part: 5
+    - rid: 4535845438023270516
+      type: {class: ExecutionHealAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        amount: 30
+    - rid: 4535845438023270517
+      type: {class: ExecutionCameraShakeAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        degrees: 0.15
+        time: 0.02
+    - rid: 4535845438023270518
+      type: {class: ExecutionBloodAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        sound:
+          clip: {fileID: 0}
+          alternatives: []
+          volume: 1
+          pitch: {x: 0.95, y: 1.05}
+          spatial: 0
+    - rid: 4535845438023270519
+      type: {class: ExecutionHealAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        amount: 30
+    - rid: 4535845438023270520
+      type: {class: ExecutionCameraShakeAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        degrees: 0.15
+        time: 0.02
+    - rid: 4535845438023270521
+      type: {class: ExecutionHandsLayerAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        layer: 1
+        worldLayer: 0
+    - rid: 4535845438023270522
+      type: {class: ExecutionSeverAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        part: 11
+    - rid: 4535845438023270523
+      type: {class: ExecutionSeverAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        part: 8
+    - rid: 4535845438023270524
+      type: {class: ExecutionKillAction, ns: ShutInVamp.Interactions, asm: Assembly-CSharp}
+      data:
+        killBodySpeed: 7
+        killHitSpeed: 12
+        killLift: 0.36
+        decapitateOnKill: 0

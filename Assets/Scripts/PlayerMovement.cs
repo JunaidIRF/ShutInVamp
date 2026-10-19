@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : MonoBehaviour, JunaidIRF.SyncedInteractions.IInteractionParticipant
 {
     public static PlayerMovement Instance { get; private set; }
 
@@ -585,6 +585,18 @@ public class PlayerMovement : MonoBehaviour
             Vector3 g = graphics.localPosition;
             graphics.localPosition = new Vector3(g.x, graphicsOriginalY, g.z);
         }
+    }
+
+    void JunaidIRF.SyncedInteractions.IInteractionParticipant.OnInteractionStart(JunaidIRF.SyncedInteractions.InteractionHandle handle, string role)
+    {
+        SetPlayerControlsEnabled(false);
+        Hold(true);
+    }
+
+    void JunaidIRF.SyncedInteractions.IInteractionParticipant.OnInteractionEnd(JunaidIRF.SyncedInteractions.InteractionHandle handle, string role, bool cancelled)
+    {
+        Hold(false);
+        SetPlayerControlsEnabled(true);
     }
 
     /// <summary>Teleport the player to the given world position. Resets velocity so the player doesn't

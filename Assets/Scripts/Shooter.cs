@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class Shooter : MonoBehaviour
+public class Shooter : MonoBehaviour, JunaidIRF.SyncedInteractions.IInteractionParticipant, JunaidIRF.SyncedInteractions.IInteractionVeto
 {
     /// <summary>Shooters whose kick is winding up right now (the player's guard ring shows a warning).</summary>
     public static readonly List<Shooter> Kicking = new List<Shooter>();
@@ -828,6 +828,35 @@ public class Shooter : MonoBehaviour
     {
         var cut = FindDismemberment();
         return cut != null ? cut.BoneOf(part) : null;
+    }
+
+    void JunaidIRF.SyncedInteractions.IInteractionParticipant.OnInteractionStart(JunaidIRF.SyncedInteractions.InteractionHandle handle, string role)
+    {
+        if (role == "Victim" || role == "Receiver") BeginExecution();
+    }
+
+    void JunaidIRF.SyncedInteractions.IInteractionParticipant.OnInteractionEnd(JunaidIRF.SyncedInteractions.InteractionHandle handle, string role, bool cancelled)
+    {
+        if (cancelled && !isDead)
+        {
+            isExecuted = false;
+            if (ownCollider != null) ownCollider.enabled = true;
+            if (anim != null) anim.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+        }
+    }
+
+    bool JunaidIRF.SyncedInteractions.IInteractionVeto.CanInteract(JunaidIRF.SyncedInteractions.InteractionActor partner, JunaidIRF.SyncedInteractions.InteractionAsset asset, string role, out string reason)
+    {
+        if (role == "Victim" || role == "Receiver")
+        {
+            if (!CanBeExecuted)
+            {
+                reason = "victim is not stunned or is already dead";
+                return false;
+            }
+        }
+        reason = null;
+        return true;
     }
 
     Dismemberment FindDismemberment()
