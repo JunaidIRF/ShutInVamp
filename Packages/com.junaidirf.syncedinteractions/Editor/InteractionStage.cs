@@ -68,7 +68,9 @@ namespace JunaidIRF.SyncedInteractions.Editor
             SessionState.SetString(SessionAsset, AssetDatabase.GetAssetPath(asset));
 
             string assetPath = AssetDatabase.GetAssetPath(asset);
-            EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets", "SyncedInteractionsStage");
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            EditorSceneManager.SaveScene(scene, $"{Folder}/Stage.unity");
             asset = AssetDatabase.LoadAssetAtPath<InteractionAsset>(assetPath);   // switching scenes unloads it from memory
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
@@ -180,20 +182,17 @@ namespace JunaidIRF.SyncedInteractions.Editor
             {
                 WriteBack();
                 EndPreviews(info);
-                var director = info.GetComponent<PlayableDirector>();
-                string tl = director != null && director.playableAsset != null ? AssetDatabase.GetAssetPath(director.playableAsset) : null;
-                if (!string.IsNullOrEmpty(tl)) AssetDatabase.DeleteAsset(tl);
-                if (AssetDatabase.IsValidFolder(Folder) && AssetDatabase.FindAssets("", new[] { Folder }).Length == 0) AssetDatabase.DeleteAsset(Folder);
             }
-            var curScene = SceneManager.GetActiveScene();
-            if (string.IsNullOrEmpty(curScene.path)) EditorSceneManager.MarkSceneClean(curScene);
-
             var back = SessionState.GetString(SessionReturn, "").Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
             SessionState.EraseString(SessionReturn);
             SessionState.EraseString(SessionAsset);
-            if (back.Length == 0) { EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single); return; }
-            EditorSceneManager.OpenScene(back[0], OpenSceneMode.Single);
-            for (int i = 1; i < back.Length; i++) EditorSceneManager.OpenScene(back[i], OpenSceneMode.Additive);
+            if (back.Length == 0) EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            else
+            {
+                EditorSceneManager.OpenScene(back[0], OpenSceneMode.Single);
+                for (int i = 1; i < back.Length; i++) EditorSceneManager.OpenScene(back[i], OpenSceneMode.Additive);
+            }
+            if (AssetDatabase.IsValidFolder(Folder)) AssetDatabase.DeleteAsset(Folder);
         }
 
         static void Poll()

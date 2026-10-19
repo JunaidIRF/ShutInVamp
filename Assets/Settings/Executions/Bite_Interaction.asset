@@ -49,14 +49,14 @@ MonoBehaviour:
   cancellable: 1
   events:
   - name: Event 1
-    id: 
+    id: e9d6718f
     time: 0.21666667
     role: Victim
     bone: mixamorig:LeftShoulder
     actions:
     - rid: 4535845438023270496
   - name: Event 2
-    id: 
+    id: a16434c0
     time: 0.4
     role: Victim
     bone: mixamorig:LeftShoulder
@@ -65,14 +65,14 @@ MonoBehaviour:
     - rid: 4535845438023270498
     - rid: 4535845438023270499
   - name: Event 3
-    id: 
+    id: f73e2961
     time: 0.75
     role: Victim
     bone: mixamorig:LeftShoulder
     actions:
     - rid: 4535845438023270500
   - name: Event 4
-    id: 
+    id: 1808bf68
     time: 0.9
     role: Victim
     bone: mixamorig:LeftShoulder
@@ -82,7 +82,7 @@ MonoBehaviour:
     - rid: 4535845438023270503
     - rid: 4535845438023270504
   - name: Event 5
-    id: 
+    id: 2d44e54e
     time: 1.05
     role: Victim
     bone: mixamorig:LeftShoulder
@@ -90,7 +90,7 @@ MonoBehaviour:
     - rid: 4535845438023270505
     - rid: 4535845438023270506
   - name: Kill
-    id: 
+    id: a5a75cc0
     time: 1.3
     role: Victim
     bone: mixamorig:LeftShoulder
