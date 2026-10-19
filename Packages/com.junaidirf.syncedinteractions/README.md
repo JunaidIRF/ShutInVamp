@@ -17,7 +17,7 @@ Paired executions, co-op takedowns, handshakes, hugs, and group interactions dri
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg?style=for-the-badge)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-purple.svg?style=for-the-badge)]()
 
-[Features](#-features) • [Installation](#-installation) • [Quickstart](#-quickstart-in-3-steps) • [Authoring Modes](#-two-authoring-modes) • [Custom Actions](#-custom-game-actions) • [Runtime API](#-runtime-api)
+[Features](#-features) • [Installation](#-installation) • [Quickstart](#-quickstart-in-3-steps) • [Visual Guide](Documentation~/VisualGuide.md) • [Manual](Documentation~/Manual.md) • [Runtime API](#-runtime-api)
 
 </div>
 
