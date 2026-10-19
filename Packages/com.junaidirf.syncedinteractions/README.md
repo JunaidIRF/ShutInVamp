@@ -5,6 +5,7 @@
 **Synchronized multi-character animations with zero Animator Controller edits.**<br/>
 Paired executions, co-op takedowns, handshakes, hugs, and group interactions driven in lockstep from a single master clock.
 
+[![UPM Version](https://img.shields.io/badge/UPM-v0.2.0-blue.svg?style=for-the-badge&logo=unity)](package.json)
 [![Unity 6000+](https://img.shields.io/badge/Unity-6000%2B%20%7C%202022.3%2B-blue.svg?style=for-the-badge&logo=unity)](https://unity.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE.md)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg?style=for-the-badge)]()
@@ -34,14 +35,21 @@ Paired executions, co-op takedowns, handshakes, hugs, and group interactions dri
 ### Package Manager (Git URL)
 In the Unity Editor:
 > **Window** &rarr; **Package Manager** &rarr; **[+]** &rarr; **Add package from git URL...**
+
+**Via Repository Subdirectory:**
 ```text
-https://github.com/JunaidIRF/SyncedInteractions.git
+https://github.com/JunaidIRF/ShutInVamp.git?path=/Packages/com.junaidirf.syncedinteractions#v0.2.0
+```
+
+**Via Standalone Package Repo:**
+```text
+https://github.com/JunaidIRF/SyncedInteractions.git#v0.2.0
 ```
 
 ### Manual `manifest.json`
-Add this line to `Packages/manifest.json`:
+Add to `Packages/manifest.json`:
 ```json
-"com.junaidirf.syncedinteractions": "https://github.com/JunaidIRF/SyncedInteractions.git"
+"com.junaidirf.syncedinteractions": "https://github.com/JunaidIRF/ShutInVamp.git?path=/Packages/com.junaidirf.syncedinteractions#v0.2.0"
 ```
 
 ---

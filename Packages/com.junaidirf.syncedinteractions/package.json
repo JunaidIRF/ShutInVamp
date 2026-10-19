@@ -1,11 +1,17 @@
 {
   "name": "com.junaidirf.syncedinteractions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Synced Interactions",
-  "description": "Play one synced animation across several characters: handshakes, hugs, executions, group moves. Any character with an Animator can take part (Humanoid or Generic), with no controller changes. Characters line up on their slots, play in perfect sync from one clock, fire timed events, and blend back to their own animation. Authored on a Timeline with real preview characters.",
+  "description": "Play one synced animation across several characters: handshakes, hugs, executions, group moves. Any character with an Animator can take part (Humanoid or Generic), with no controller changes. Characters line up on their slots, play in perfect sync from one clock, fire timed events, and blend back to their own animation. Authored on a Timeline or Dual-Rig Dopesheet with real preview characters.",
   "unity": "6000.0",
+  "license": "MIT",
   "author": { "name": "JunaidIRF", "url": "https://github.com/JunaidIRF" },
-  "keywords": [ "animation", "interaction", "synced", "paired", "execution", "takedown", "handshake", "playables" ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JunaidIRF/ShutInVamp.git",
+    "directory": "Packages/com.junaidirf.syncedinteractions"
+  },
+  "keywords": [ "animation", "interaction", "synced", "paired", "execution", "takedown", "handshake", "playables", "dual-rig" ],
   "dependencies": {
     "com.unity.timeline": "1.8.7",
     "com.unity.modules.animation": "1.0.0",
