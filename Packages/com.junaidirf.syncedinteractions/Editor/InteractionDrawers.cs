@@ -160,14 +160,50 @@ namespace JunaidIRF.SyncedInteractions.Editor
     {
         public override void OnGUI(Rect rect, SerializedProperty property, GUIContent label)
         {
+            var target = property.serializedObject;
+            string path = property.propertyPath;
+            void Pick(string v) { target.Update(); target.FindProperty(path).stringValue = v; target.ApplyModifiedProperties(); }
+
+            // Support drag and drop of GameObject / Transform directly onto this field
+            Event evt = Event.current;
+            if (rect.Contains(evt.mousePosition))
+            {
+                if (evt.type == EventType.DragUpdated)
+                {
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Link;
+                    evt.Use();
+                }
+                else if (evt.type == EventType.DragPerform)
+                {
+                    var dropped = DragAndDrop.objectReferences.OfType<GameObject>().FirstOrDefault()?.transform
+                                  ?? DragAndDrop.objectReferences.OfType<Transform>().FirstOrDefault();
+                    if (dropped != null)
+                    {
+                        Pick(dropped.name);
+                        DragAndDrop.AcceptDrag();
+                        evt.Use();
+                    }
+                }
+            }
+
             var field = new Rect(rect.x, rect.y, rect.width - 22f, rect.height);
             EditorGUI.PropertyField(field, property, label);
             if (!GUI.Button(new Rect(field.xMax + 2f, rect.y, 20f, rect.height), "▾", EditorStyles.miniButton)) return;
 
             var menu = new GenericMenu();
-            var target = property.serializedObject;
-            string path = property.propertyPath;
-            void Pick(string v) { target.Update(); target.FindProperty(path).stringValue = v; target.ApplyModifiedProperties(); }
+
+            // Option to use the currently selected GameObject / bone in the scene
+            Transform sel = Selection.activeTransform;
+            if (sel != null)
+            {
+                menu.AddItem(new GUIContent($"Use Selected: \"{sel.name}\""), property.stringValue == sel.name, () => Pick(sel.name));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Use Selected: (nothing selected in scene)"));
+            }
+            menu.AddSeparator("");
+
             menu.AddItem(new GUIContent("(root)"), string.IsNullOrEmpty(property.stringValue), () => Pick(""));
 
             var preview = PreviewFor(property);

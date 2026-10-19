@@ -185,6 +185,9 @@ namespace JunaidIRF.SyncedInteractions.Editor
                 if (!string.IsNullOrEmpty(tl)) AssetDatabase.DeleteAsset(tl);
                 if (AssetDatabase.IsValidFolder(Folder) && AssetDatabase.FindAssets("", new[] { Folder }).Length == 0) AssetDatabase.DeleteAsset(Folder);
             }
+            var curScene = SceneManager.GetActiveScene();
+            if (string.IsNullOrEmpty(curScene.path)) EditorSceneManager.MarkSceneClean(curScene);
+
             var back = SessionState.GetString(SessionReturn, "").Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
             SessionState.EraseString(SessionReturn);
             SessionState.EraseString(SessionAsset);
